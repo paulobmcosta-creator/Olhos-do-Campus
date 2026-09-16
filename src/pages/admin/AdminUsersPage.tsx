@@ -1,0 +1,2 @@
+import { AdminUserManagement } from '../../components/admin/AdminUserManagement';import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+export function AdminUsersPage():React.JSX.Element{useDocumentTitle('Usuários administrativos');return <div className="space-y-5"><div><h1 className="text-3xl font-bold">Usuários</h1><p className="mt-1 text-sm text-slate-700">Gestão de Administradores, Gestores e tratamento explícito de papéis legados.</p></div><AdminUserManagement/></div>}

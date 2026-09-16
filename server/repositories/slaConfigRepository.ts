@@ -1,0 +1,29 @@
+import type { Firestore } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import type { ServiceCalendar, ServiceCalendarException, SlaConfiguration } from '../../src/models/operations';
+import { DEFAULT_SERVICE_CALENDAR, DEFAULT_SLA_CONFIG } from './referenceSeedData';
+
+function iso(v:unknown):string{if(v instanceof Timestamp)return v.toDate().toISOString();if(typeof v==='string')return v;return new Date(0).toISOString();}
+export class SlaConfigVersionConflictError extends Error{}
+export interface SlaConfigRepository{
+  getSlaConfig():Promise<SlaConfiguration>; updateSlaConfig(input:SlaConfiguration,expectedVersion:number,actorId:string):Promise<SlaConfiguration>;
+  getCalendar():Promise<ServiceCalendar>; updateCalendar(input:ServiceCalendar,expectedVersion:number,actorId:string):Promise<ServiceCalendar>;
+  listExceptions():Promise<ServiceCalendarException[]>; getException(id:string):Promise<ServiceCalendarException|undefined>;
+  upsertException(input:Omit<ServiceCalendarException,'createdAt'|'createdBy'|'updatedAt'|'updatedBy'>,actorId:string):Promise<ServiceCalendarException>;
+  deleteException(id:string):Promise<void>; seedDefaults(actorId:string):Promise<void>;
+}
+export class FirestoreSlaConfigRepository implements SlaConfigRepository{
+  public constructor(private readonly firestore:Firestore){}
+  private slaRef(){return this.firestore.collection('systemSettings').doc('sla');}
+  private calRef(){return this.firestore.collection('serviceCalendars').doc('default');}
+  private exc(){return this.firestore.collection('serviceCalendarExceptions');}
+  public async getSlaConfig():Promise<SlaConfiguration>{const s=await this.slaRef().get();if(!s.exists)return structuredClone(DEFAULT_SLA_CONFIG);const d=s.data()??{};return{schemaVersion:1,policyVersion:String(d.policyVersion??'0.6.0-default-v1'),firstResponseBusinessHours:d.firstResponseBusinessHours as SlaConfiguration['firstResponseBusinessHours'],priorityMultipliers:d.priorityMultipliers as SlaConfiguration['priorityMultipliers'],nearDueThresholdPercent:Number(d.nearDueThresholdPercent??20),version:Number(d.version??1),updatedAt:iso(d.updatedAt),updatedBy:String(d.updatedBy??'')};}
+  public async updateSlaConfig(input:SlaConfiguration,expectedVersion:number,actorId:string):Promise<SlaConfiguration>{const ref=this.slaRef();return this.firestore.runTransaction(async tx=>{const s=await tx.get(ref);const current=s.exists?Number(s.data()?.version??1):1;if(current!==expectedVersion)throw new SlaConfigVersionConflictError();const next={...input,version:expectedVersion+1,updatedAt:new Date().toISOString(),updatedBy:actorId};tx.set(ref,{...next,updatedAt:FieldValue.serverTimestamp()});return next;});}
+  public async getCalendar():Promise<ServiceCalendar>{const s=await this.calRef().get();if(!s.exists)return structuredClone(DEFAULT_SERVICE_CALENDAR);const d=s.data()??{};return{id:'default',schemaVersion:1,timezone:'America/Sao_Paulo',weekly:d.weekly as ServiceCalendar['weekly'],version:Number(d.version??1),updatedAt:iso(d.updatedAt),updatedBy:String(d.updatedBy??'')};}
+  public async updateCalendar(input:ServiceCalendar,expectedVersion:number,actorId:string):Promise<ServiceCalendar>{const ref=this.calRef();return this.firestore.runTransaction(async tx=>{const s=await tx.get(ref);const current=s.exists?Number(s.data()?.version??1):1;if(current!==expectedVersion)throw new SlaConfigVersionConflictError();const next={...input,id:'default' as const,timezone:'America/Sao_Paulo' as const,version:expectedVersion+1,updatedAt:new Date().toISOString(),updatedBy:actorId};tx.set(ref,{schemaVersion:1,timezone:next.timezone,weekly:next.weekly,version:next.version,updatedAt:FieldValue.serverTimestamp(),updatedBy:actorId});return next;});}
+  public async listExceptions():Promise<ServiceCalendarException[]>{const s=await this.exc().orderBy('date','asc').get();return s.docs.map(doc=>{const d=doc.data();return{id:doc.id,schemaVersion:1,date:String(d.date),type:d.type as ServiceCalendarException['type'],label:String(d.label??''),closed:d.closed===true,...(typeof d.start==='string'?{start:d.start}:{}),...(typeof d.end==='string'?{end:d.end}:{}),createdAt:iso(d.createdAt),createdBy:String(d.createdBy??''),updatedAt:iso(d.updatedAt),updatedBy:String(d.updatedBy??'')};});}
+  public async getException(id:string):Promise<ServiceCalendarException|undefined>{return (await this.listExceptions()).find(x=>x.id===id);}
+  public async upsertException(input:Omit<ServiceCalendarException,'createdAt'|'createdBy'|'updatedAt'|'updatedBy'>,actorId:string):Promise<ServiceCalendarException>{const ref=this.exc().doc(input.id);const existing=await ref.get();const now=new Date().toISOString();const data=existing.data();const createdAt=existing.exists?iso(data?.createdAt):now;const createdBy=existing.exists?String(data?.createdBy??actorId):actorId;const result:ServiceCalendarException={...input,createdAt,createdBy,updatedAt:now,updatedBy:actorId};const existingCreatedAt=data?.createdAt as unknown;await ref.set({...input,createdAt:existing.exists&&(existingCreatedAt!==undefined)?existingCreatedAt:FieldValue.serverTimestamp(),createdBy,updatedAt:FieldValue.serverTimestamp(),updatedBy:actorId},{merge:true});return result;}
+  public async deleteException(id:string):Promise<void>{await this.exc().doc(id).delete();}
+  public async seedDefaults(actorId:string):Promise<void>{const sla=await this.slaRef().get();if(!sla.exists)await this.slaRef().create({...DEFAULT_SLA_CONFIG,updatedAt:FieldValue.serverTimestamp(),updatedBy:actorId});const cal=await this.calRef().get();if(!cal.exists)await this.calRef().create({schemaVersion:1,timezone:'America/Sao_Paulo',weekly:DEFAULT_SERVICE_CALENDAR.weekly,version:1,updatedAt:FieldValue.serverTimestamp(),updatedBy:actorId});}
+}

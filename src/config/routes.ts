@@ -1,0 +1,14 @@
+export const ROUTES = {
+  home: '/',
+  newOccurrence: '/ocorrencias/nova',
+  trackOccurrence: '/ocorrencias/acompanhar',
+  adminLogin: '/administracao/entrar',
+  adminHome: '/administracao',
+  adminOccurrences: '/administracao/ocorrencias',
+  adminAnalytics: '/administracao/indicadores',
+  adminUsers: '/administracao/usuarios',
+  adminTeams: '/administracao/equipes',
+  adminAudit: '/administracao/auditoria',
+  adminSettings: '/administracao/configuracoes',
+  adminOccurrence: (id: string): string => `/administracao/ocorrencias/${encodeURIComponent(id)}`,
+} as const;

@@ -1,0 +1,33 @@
+{
+  "name": "Olhos do Campus",
+  "officialName": "Sistema Institucional de Manutenção da Infraestrutura Física",
+  "description": "Sistema do IFES — Campus Barra de São Francisco para registro e acompanhamento de problemas relacionados à infraestrutura física.",
+  "version": "0.6.2",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "INFRASTRUCTURE_OCCURRENCE_REGISTRATION",
+    "PUBLIC_PROTOCOL_TRACKING",
+    "FIREBASE_ANONYMOUS_AUTHENTICATION",
+    "GOOGLE_ADMIN_AUTHENTICATION",
+    "FIRESTORE_ADMIN_AUTHORIZATION",
+    "FIREBASE_APP_CHECK",
+    "FIRESTORE_OCCURRENCE_PERSISTENCE",
+    "TRANSACTIONAL_PROTOCOLS",
+    "PERSISTENT_OCCURRENCE_HISTORY",
+    "CLOUD_STORAGE_PHOTO_PERSISTENCE",
+    "MULTIPLE_INITIAL_PHOTOS",
+    "RESOLUTION_PHOTOS",
+    "SERVER_SIDE_IMAGE_REENCODING",
+    "PROTECTED_PHOTO_STREAMING",
+    "ADMIN_OPERATIONAL_TEAMS",
+    "ADMIN_CATEGORY_AND_LOCATION_CORRECTION",
+    "BUSINESS_HOURS_SLA",
+    "CURSOR_PAGINATION",
+    "ADMIN_ANALYTICS",
+    "CSV_XLSX_PDF_EXPORT",
+    "GLOBAL_AUDIT",
+    "TEST_DATA_PURGE"
+  ]
+}

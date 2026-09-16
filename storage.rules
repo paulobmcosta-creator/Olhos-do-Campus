@@ -1,0 +1,10 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Arquitetura server-only: clientes Web nunca leem, gravam, listam ou excluem objetos diretamente.
+    // O backend utiliza exclusivamente Firebase Admin SDK e aplica App Check, Auth e autorização na API.
+    match /{object=**} {
+      allow read, write: if false;
+    }
+  }
+}

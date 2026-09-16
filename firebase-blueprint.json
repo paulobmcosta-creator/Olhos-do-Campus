@@ -1,0 +1,246 @@
+{
+  "version": "0.6.2",
+  "project": "Olhos do Campus",
+  "institution": "Instituto Federal do Espírito Santo — Campus Barra de São Francisco",
+  "architecture": {
+    "webClientDirectFirestoreAccess": false,
+    "webClientDirectStorageAccess": false,
+    "dataPath": "Frontend → Express API → App Check → Auth → Authorization → Service → Repository → Firebase Admin"
+  },
+  "entities": {
+    "AdminUser": {
+      "collection": "adminUsers",
+      "schemaVersion": 1,
+      "description": "Conta administrativa do contrato introduzido na versão 0.6.0. Papéis válidos no contrato ativo: Administrador e Gestor. Valores históricos fora desse contrato são tratados exclusivamente pelo procedimento de migração segura.",
+      "fields": {
+        "email": "string",
+        "normalizedEmail": "string",
+        "uid": "string?",
+        "displayName": "string",
+        "role": "Administrador | Gestor",
+        "teamIds": "string[]",
+        "department": "string? (legado, não é mecanismo de autorização)",
+        "active": "boolean",
+        "createdAt": "Timestamp",
+        "createdBy": "string",
+        "updatedAt": "Timestamp",
+        "updatedBy": "string",
+        "lastAuthorizedLoginAt": "Timestamp?"
+      }
+    },
+    "Occurrence": {
+      "collection": "occurrences",
+      "schemaVersion": 2,
+      "description": "Estado materializado atual. Mantém valores reportados imutáveis e snapshots atuais, classificação REAL/TEST, roteamento e snapshot de SLA.",
+      "fields": {
+        "protocol": "string",
+        "trackingKeyHash": "string",
+        "trackingKeySalt": "string",
+        "reportedCategoryId": "string",
+        "reportedCategoryNameSnapshot": "string",
+        "categoryId": "string",
+        "categoryNameSnapshot": "string",
+        "reportedLocation": "OccurrenceLocation",
+        "location": "OccurrenceLocation",
+        "description": "string",
+        "immediateRisk": "boolean",
+        "status": "OccurrenceStatus",
+        "priority": "Baixa | Normal | Alta | Urgente | Emergencial",
+        "priorityRank": "number",
+        "assignedTeamId": "string?",
+        "assignedTeamNameSnapshot": "string?",
+        "assignedToAdminUserId": "string?",
+        "assignedToDisplayNameSnapshot": "string?",
+        "duplicateOfOccurrenceId": "string?",
+        "duplicateOfProtocol": "string?",
+        "createdAt": "Timestamp",
+        "updatedAt": "Timestamp",
+        "closedAt": "Timestamp?",
+        "resolvedAt": "Timestamp? (somente Resolvida)",
+        "firstPublicResponseAt": "Timestamp?",
+        "version": "number",
+        "dataClassification": "REAL | TEST",
+        "reopenedCount": "number",
+        "reopened": "boolean (materializado para filtro)",
+        "lastReopenedAt": "Timestamp?",
+        "hasTeam": "boolean",
+        "hasResponsible": "boolean",
+        "hasPhoto": "boolean",
+        "isClosed": "boolean",
+        "searchTokens": "string[]",
+        "sla": "OccurrenceSla"
+      },
+      "subcollections": {
+        "events": "OccurrenceEvent (append-only)",
+        "photos": "OccurrencePhoto metadata"
+      }
+    },
+    "OccurrenceLocation": {
+      "fields": {
+        "campusId": "string?",
+        "campusName": "string",
+        "buildingId": "string?",
+        "buildingName": "string",
+        "floorId": "string?",
+        "floor": "string",
+        "roomId": "string?",
+        "room": "string",
+        "complement": "string?",
+        "isOther": "boolean?",
+        "otherDescription": "string?"
+      }
+    },
+    "OccurrenceSla": {
+      "schemaVersion": 1,
+      "fields": {
+        "policyVersion": "string",
+        "firstResponseTargetBusinessMinutes": "number",
+        "firstResponseDueAt": "Timestamp",
+        "firstResponseAt": "Timestamp?",
+        "firstResponseOutcome": "ON_TIME | BREACHED?",
+        "resolutionBaseBusinessMinutes": "number",
+        "priorityMultiplier": "number",
+        "resolutionTargetBusinessMinutes": "number",
+        "resolutionDueAt": "Timestamp",
+        "resolutionNearDueAt": "Timestamp",
+        "resolutionPaused": "boolean",
+        "resolutionPauseStartedAt": "Timestamp?",
+        "accumulatedPausedBusinessMinutes": "number",
+        "completedAt": "Timestamp?",
+        "resolutionOutcome": "ON_TIME | BREACHED?",
+        "calendarSnapshotId": "string",
+        "calendarSnapshot": "{ calendar, exceptions } (snapshot histórico)",
+        "legacyAssessment": "CALCULATED | ESTIMATED | UNAVAILABLE?"
+      },
+      "description": "Snapshot persistente da política aplicada. O tempo efetivo decorrido é calculado no servidor/DTO a partir do snapshot e dos períodos de pausa."
+    },
+    "OccurrenceEvent": {
+      "path": "occurrences/{occurrenceId}/events/{eventId}",
+      "appendOnly": true,
+      "fields": {
+        "visibility": "PUBLIC | INTERNAL",
+        "audience": "ADMIN_ONLY | ADMINS_AND_MANAGERS | RESPONSIBLE_TEAM?",
+        "audienceTeamIdSnapshot": "string? (snapshot da equipe quando audiência RESPONSIBLE_TEAM)",
+        "reason": "string?",
+        "createdAt": "Timestamp",
+        "actorAdminUserId": "string?",
+        "actorDisplayNameSnapshot": "string?",
+        "actorRoleSnapshot": "string?",
+        "eventType": "OccurrenceEventType"
+      }
+    },
+    "Category": {
+      "collection": "categories",
+      "schemaVersion": 2,
+      "fields": {
+        "id": "stable document id",
+        "name": "string",
+        "description": "string?",
+        "active": "boolean",
+        "sortOrder": "number",
+        "resolutionBaseBusinessHours": "number",
+        "version": "number",
+        "updatedAt": "Timestamp",
+        "updatedBy": "string"
+      },
+      "physicalDeleteWhenReferenced": false
+    },
+    "LocationHierarchy": {
+      "collection": "locations",
+      "description": "Um campus ativo nesta versão; áreas/blocos e ambientes com identificadores estáveis. Não há pavimentos institucionais inventados.",
+      "fields": {
+        "campusId": "ifes-bsf",
+        "campusName": "IFES — Campus Barra de São Francisco",
+        "buildings": "Bloco 01 | Bloco 02 | Bloco 03 | Externo",
+        "rooms": "60 ambientes iniciais",
+        "active": "boolean",
+        "sortOrder": "number",
+        "version": "number"
+      },
+      "physicalDeleteWhenReferenced": false,
+      "schemaVersion": 2
+    },
+    "OperationalTeam": {
+      "collection": "operationalTeams",
+      "schemaVersion": 1,
+      "fields": {
+        "name": "string",
+        "description": "string?",
+        "active": "boolean",
+        "sortOrder": "number",
+        "memberAdminUserIds": "string[]",
+        "createdAt": "Timestamp",
+        "createdBy": "string",
+        "updatedAt": "Timestamp",
+        "updatedBy": "string"
+      },
+      "physicalDeleteWhenReferenced": false
+    },
+    "SlaConfiguration": {
+      "path": "systemSettings/sla",
+      "schemaVersion": 1,
+      "fields": {
+        "policyVersion": "string",
+        "firstResponseBusinessHours": "Record<priority, number>",
+        "priorityMultipliers": "Record<priority, number>",
+        "nearDueThresholdPercent": "number",
+        "version": "number",
+        "updatedAt": "Timestamp",
+        "updatedBy": "string"
+      }
+    },
+    "ServiceCalendar": {
+      "path": "serviceCalendars/default",
+      "schemaVersion": 1,
+      "fields": {
+        "timezone": "America/Sao_Paulo",
+        "weekly": "segunda-sexta 09:00-19:00; sábado/domingo fechados por default",
+        "version": "number",
+        "updatedAt": "Timestamp",
+        "updatedBy": "string"
+      }
+    },
+    "ServiceCalendarException": {
+      "collection": "serviceCalendarExceptions",
+      "schemaVersion": 1,
+      "fields": {
+        "date": "YYYY-MM-DD",
+        "type": "FERIADO | RECESSO | SUSPENSAO | HORARIO_ESPECIAL",
+        "label": "string",
+        "closed": "boolean",
+        "start": "HH:mm?",
+        "end": "HH:mm?",
+        "createdAt": "Timestamp",
+        "createdBy": "string",
+        "updatedAt": "Timestamp",
+        "updatedBy": "string"
+      }
+    },
+    "AuditLog": {
+      "collection": "auditLogs",
+      "appendOnly": true,
+      "fields": {
+        "eventType": "AuditEventType",
+        "actorUid": "string?",
+        "actorEmail": "string?",
+        "actorRole": "Administrador | Gestor?",
+        "targetType": "string",
+        "targetId": "string?",
+        "timestamp": "Timestamp",
+        "summary": "string",
+        "requestCorrelationId": "string?",
+        "metadata": "record de metadados operacionais não sensíveis?"
+      }
+    }
+  },
+  "security": {
+    "firestoreClientRules": "deny-all",
+    "storageClientRules": "deny-all",
+    "publicTracking": "protocolo + chave fora da URL",
+    "publicRegistration": "Firebase Authentication anônima",
+    "administrativeAuthentication": "Google Sign-In + allowlist adminUsers",
+    "appCheck": true,
+    "photoProcessing": "server-only, EXIF removido",
+    "optimisticLocking": "expectedVersion + HTTP 409"
+  }
+}
