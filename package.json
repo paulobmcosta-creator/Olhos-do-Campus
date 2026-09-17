@@ -10,7 +10,8 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
-    "dev": "tsx watch server/index.ts",
+    "dev": "vite",
+    "dev:fullstack": "tsx watch server/index.ts",
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
     "build:server": "esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=dist/server/index.js",
