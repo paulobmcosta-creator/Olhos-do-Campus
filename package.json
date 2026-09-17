@@ -1,17 +1,21 @@
 {
   "name": "olhos-do-campus",
   "private": true,
-  "version": "0.6.2",
+  "version": "1.0.0",
   "description": "Sistema do IFES — Campus Barra de São Francisco para registro e acompanhamento de problemas relacionados à infraestrutura física.",
   "type": "module",
   "packageManager": "npm@10.9.2",
   "engines": {
-    "node": ">=20.19.0",
+    "node": ">=22.22.2 <23",
     "npm": ">=10.0.0"
   },
   "scripts": {
     "dev": "tsx watch server/index.ts",
-    "build": "vite build && esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=dist/server/index.js && node scripts/prepareProductionPackage.mjs",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "vite build",
+    "build:server": "esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=dist/server/index.js",
+    "build:pages": "npm run build:client",
+    "build:cloud-run": "npm run build:server && node scripts/prepareProductionPackage.mjs",
     "start": "node dist/server/index.js",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
@@ -28,12 +32,25 @@
     "validate": "npm run typecheck && npm run lint && npm run test && npm run build",
     "clean": "rimraf dist coverage .vitest .firebase-export",
     "storage:cleanup": "tsx scripts/storageCleanup.ts",
+    "storage:migrate:r2": "tsx scripts/migrateStorageToR2.ts",
+    "storage:reconcile": "tsx scripts/reconcilePhotoStorage.ts",
+    "infra:artifact-cleanup:dry-run": "tsx scripts/artifactRegistryCleanup.ts --dry-run",
+    "infra:artifact-cleanup:apply": "tsx scripts/artifactRegistryCleanup.ts --apply",
+    "infra:artifact-snapshot": "tsx scripts/artifactRegistrySnapshot.ts",
+    "worker:typecheck": "npm --prefix infra/cloudflare/maintenance-worker run typecheck",
+    "worker:test": "vitest run tests/maintenanceWorker070.test.ts",
+    "test:ews": "vitest run tests/ewsIntegration.optIn.test.ts",
+    "test:r2": "vitest run tests/r2Integration.optIn.test.ts",
+    "test:resend": "vitest run tests/resendIntegration.optIn.test.ts",
     "test:storage": "firebase emulators:exec --project olhos-do-campus-local --only firestore,storage \"vitest run tests/storageIntegration.test.ts\"",
     "firebase:migrate-0.6": "tsx scripts/migrate060.ts",
     "firebase:seed-campus-spaces": "tsx scripts/seedCampusSpaces.ts",
-    "prepare:production-package": "node scripts/prepareProductionPackage.mjs"
+    "prepare:production-package": "node scripts/prepareProductionPackage.mjs",
+    "check:scale": "node scripts/checkScaleConfig.mjs",
+    "verify:release": "node scripts/verifyRelease.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1112.0",
     "@fastify/busboy": "3.2.0",
     "dotenv": "17.4.2",
     "express": "4.22.2",
@@ -44,11 +61,13 @@
     "react-dom": "19.2.8",
     "react-router": "^7.18.2",
     "react-router-dom": "^7.18.2",
-    "sharp": "0.35.3",
+    "resend": "6.20.0",
+    "sharp": "0.35.4",
     "zod": "3.25.76"
   },
   "devDependencies": {
     "@adobe/css-tools": "^4.5.0",
+    "@cloudflare/workers-types": "5.20260818.1",
     "@eslint/js": "^9.39.5",
     "@firebase/rules-unit-testing": "5.0.1",
     "@tailwindcss/vite": "4.3.3",
@@ -76,7 +95,8 @@
     "typescript": "5.8.3",
     "typescript-eslint": "^8.44.1",
     "vite": "6.4.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wrangler": "4.124.0"
   },
   "overrides": {
     "@opentelemetry/core": "2.8.0",
@@ -85,6 +105,7 @@
     },
     "teeny-request": {
       "uuid": "11.1.1"
-    }
+    },
+    "qs": "6.16.0"
   }
 }

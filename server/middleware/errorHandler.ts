@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { HttpError } from '../types/errors';
+import { logger } from '../utils/logger';
 
 export const apiNotFound: RequestHandler = (_request, _response, next) => {
   next(new HttpError(404, 'NOT_FOUND', 'Rota de API não encontrada.'));
@@ -41,7 +42,7 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, request, respo
     return;
   }
   if (firebaseUnavailable(error)) {
-    console.error(`Firebase indisponível [${correlationId}]:`, error);
+    logger.error('http.error.firebase_unavailable', { requestId: correlationId, errorCode: 'FIREBASE_UNAVAILABLE', status: 503 });
     response.status(503).json({
       error: {
         code: 'FIREBASE_UNAVAILABLE',
@@ -51,7 +52,7 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, request, respo
     });
     return;
   }
-  console.error(`Erro interno não tratado [${correlationId}]:`, error);
+  logger.error('http.error.unhandled', { requestId: correlationId, errorCode: 'INTERNAL_ERROR', status: 500 });
   response.status(500).json({
     error: {
       code: 'INTERNAL_ERROR',

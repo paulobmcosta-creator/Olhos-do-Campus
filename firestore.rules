@@ -1,7 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Arquitetura server-only. Inclui occurrences/{id}/photos e storageCleanupTasks:
+    // Arquitetura server-only. Inclui occurrences/{id}/photos, storageCleanupTasks,
+    // notificationOutbox (incluindo attempts), notificationWebhookEvents, infrastructureUsageSnapshots,
+    // infrastructureCapacitySettings, storageReconciliationReports e artifactRegistrySnapshots:
     // nenhum documento de domínio é acessado diretamente pelo SDK Web.
     match /{document=**} {
       allow read, write: if false;

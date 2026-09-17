@@ -55,8 +55,8 @@ export class AdminAuthorizationService {
     }
 
     if (result.status === 'legacy-role') {
-      await this.auditDenied(firebaseUser, correlationId, 'Cadastro com papel legado Atendente aguardando decisão administrativa.', normalizedEmail);
-      throw new HttpError(403, 'LEGACY_ROLE_REQUIRES_RESOLUTION', 'O cadastro possui um papel administrativo legado. Um Administrador deve convertê-lo explicitamente para Gestor ou inativá-lo.');
+      await this.auditDenied(firebaseUser, correlationId, 'Cadastro com papel legado aguardando decisão administrativa.', normalizedEmail);
+      throw new HttpError(403, 'LEGACY_ROLE_REQUIRES_RESOLUTION', 'O cadastro possui um papel administrativo legado. Um Administrador deve convertê-lo explicitamente para Gestor, ativá-lo como Atendente ou inativá-lo.');
     }
 
     if (result.uidBound) {

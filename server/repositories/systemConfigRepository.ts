@@ -11,6 +11,7 @@ function parseConfig(data: DocumentData): SystemConfig {
     notificationEmails: Array.isArray(data.notificationEmails)
       ? data.notificationEmails.filter((item): item is string => typeof item === 'string')
       : [],
+    emailNotificationsEnabled: data.emailNotificationsEnabled === true,
     autoAssignRisk: data.autoAssignRisk === true,
     serviceNotice: String(data.serviceNotice ?? ''),
   };

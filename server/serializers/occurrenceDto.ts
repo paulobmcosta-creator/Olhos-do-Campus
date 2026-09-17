@@ -6,7 +6,19 @@ import type { OccurrenceEventRecord, StoredOccurrence, StoredOccurrenceSla } fro
 import type { StoredPhotoMetadata } from '../models/photoDomain';
 function iso(v:Date):string{return v.toISOString();}
 function title(e:OccurrenceEventRecord):string{switch(e.eventType){case'OCCURRENCE_CREATED':return'Ocorrência registrada';case'STATUS_CHANGED':return e.newValue?`Situação alterada para ${e.newValue}`:'Situação atualizada';case'CATEGORY_CHANGED':return'Categoria ajustada após triagem';case'LOCATION_CHANGED':return'Localização ajustada após triagem';case'PRIORITY_CHANGED':return'Prioridade atualizada';case'TEAM_ASSIGNED':case'TEAM_CHANGED':return'Equipe responsável atualizada';case'RESPONSIBLE_CHANGED':return'Gestor responsável atualizado';case'PUBLIC_MESSAGE_ADDED':return'Nova mensagem pública registrada';case'INTERNAL_NOTE_ADDED':return'Observação administrativa registrada';case'DUPLICATE_LINKED':return'Ocorrência identificada como duplicada';case'DUPLICATE_UNLINKED':return'Vínculo de duplicidade removido';case'OCCURRENCE_RESOLVED':return'Ocorrência resolvida';case'OCCURRENCE_CLOSED':return'Ocorrência encerrada';case'OCCURRENCE_REOPENED':return'Ocorrência reaberta';case'SLA_PAUSED':return'SLA efetivo pausado';case'SLA_RESUMED':return'SLA efetivo retomado';case'PHOTO_ADDED':case'PHOTO_DELETED':case'PHOTO_VISIBILITY_CHANGED':return'Registro fotográfico atualizado';}}
-function canSeeEvent(e:OccurrenceEventRecord,o:StoredOccurrence,u:AuthorizedAdminProfile):boolean{if(e.eventType!=='INTERNAL_NOTE_ADDED')return true;const a=e.audience??'ADMINS_AND_MANAGERS';if(a==='ADMINS_AND_MANAGERS')return true;if(a==='ADMIN_ONLY')return u.role==='Administrador';const teamId=e.audienceTeamIdSnapshot??o.assignedTeamId;return u.role==='Administrador'||(teamId!==undefined&&u.teamIds.includes(teamId));}
+function canSeeEvent(e:OccurrenceEventRecord,o:StoredOccurrence,u:AuthorizedAdminProfile):boolean{
+  if(e.eventType!=='INTERNAL_NOTE_ADDED')return true;
+  const a=e.audience??'ADMINS_AND_MANAGERS';
+  if(u.role==='Atendente'){
+    if(a!=='RESPONSIBLE_TEAM')return false;
+    const teamId=e.audienceTeamIdSnapshot??o.assignedTeamId;
+    return o.assignedToAdminUserId===u.id&&(teamId===undefined||u.teamIds.includes(teamId));
+  }
+  if(a==='ADMINS_AND_MANAGERS')return true;
+  if(a==='ADMIN_ONLY')return u.role==='Administrador';
+  const teamId=e.audienceTeamIdSnapshot??o.assignedTeamId;
+  return u.role==='Administrador'||(teamId!==undefined&&u.teamIds.includes(teamId));
+}
 function adminTimeline(e:OccurrenceEventRecord):TimelineEvent{return{id:e.id,date:iso(e.createdAt),title:title(e),description:e.internalDescription??e.publicDescription,isPublic:e.visibility==='PUBLIC',authorRole:e.actorRoleSnapshot};}
 function publicTimeline(e:OccurrenceEventRecord):TimelineEvent{return{id:e.id,date:iso(e.createdAt),title:title(e),...(e.publicDescription?{description:e.publicDescription}:{}),isPublic:true};}
 function publicMessage(e:OccurrenceEventRecord,admin:boolean):PublicMessage{return{id:e.id,date:iso(e.createdAt),message:e.publicDescription??'',authorRole:admin?(e.actorRoleSnapshot??'Sistema'):'Equipe responsável'};}

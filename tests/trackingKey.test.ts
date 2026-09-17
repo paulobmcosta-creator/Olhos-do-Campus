@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { generateTrackingKey, hashTrackingKey, isValidTrackingKeyFormat, verifyTrackingKey } from '../server/utils/trackingKey';
+import { generateTrackingKey, hashTrackingKey, isValidTrackingKeyFormat, verifyTrackingKey, verifyTrackingKeyDummy } from '../server/utils/trackingKey';
 
 describe('proteção criptográfica da chave de acompanhamento', () => {
   it('gera chave no formato previsto e não utiliza Math.random', () => {
@@ -35,5 +35,12 @@ describe('proteção criptográfica da chave de acompanhamento', () => {
     expect(first.trackingKeyHash).not.toBe(second.trackingKeyHash);
     expect(await verifyTrackingKey('invalida', first.trackingKeyHash, first.trackingKeySalt)).toBe(false);
     expect(await verifyTrackingKey(key, 'hash-invalido', first.trackingKeySalt)).toBe(false);
+  });
+
+  it('G09B-F002: verificação dummy sempre retorna false e aceita chaves válidas e inválidas', async () => {
+    const key = generateTrackingKey();
+    expect(await verifyTrackingKeyDummy(key)).toBe(false);
+    expect(await verifyTrackingKeyDummy('AAAA-BBBB-CCCC')).toBe(false);
+    expect(await verifyTrackingKeyDummy('invalida')).toBe(false);
   });
 });

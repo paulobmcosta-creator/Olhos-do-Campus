@@ -46,7 +46,7 @@ export function AdminLoginPage(): React.JSX.Element {
 
         <div className="mt-6 space-y-4">
           <StatusAlert>
-            <strong>Autenticação e autorização reais.</strong> O domínio permitido é apenas uma condição inicial; o e-mail também precisa constar como ativo no cadastro administrativo do Firestore.
+            <strong>Autenticação e autorização reais.</strong> O domínio permitido é apenas uma condição inicial; o e-mail também precisa constar como ativo no cadastro administrativo institucional.
           </StatusAlert>
           {FIREBASE_ENV.useEmulators && (
             <StatusAlert>

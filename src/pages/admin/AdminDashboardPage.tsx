@@ -4,9 +4,16 @@ import { Link } from 'react-router-dom';
 import { LoadingState } from '../../components/common/LoadingState';
 import { StatusAlert } from '../../components/common/StatusAlert';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useAdminAuth } from '../../context/AdminAuthContext';
+import {
+  type InfrastructureOverview,
+  CAPACITY_METRIC_LABELS,
+  formatCapacityPercent,
+} from '../../models/infrastructure';
 import type { DashboardStats } from '../../models/occurrence';
 import { ROUTES } from '../../config/routes';
 import { occurrenceService } from '../../services/occurrenceService';
+import { infrastructureService } from '../../services/infrastructureService';
 import { getErrorMessage } from '../../utils/errors';
 import { startNonDestructivePolling } from '../../utils/polling';
 
@@ -15,6 +22,9 @@ export function AdminDashboardPage(): React.JSX.Element {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [newData, setNewData] = useState(false);
+  const [infrastructure, setInfrastructure] = useState<InfrastructureOverview | null>(null);
+  const [renderedAt] = useState(() => Date.now());
+  const { session } = useAdminAuth();
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -50,30 +60,81 @@ export function AdminDashboardPage(): React.JSX.Element {
     };
   }, [stats]);
 
+  useEffect(()=>{let active=true;if(session?.user.role==='Administrador')void infrastructureService.overview().then(result=>{if(active)setInfrastructure(result);}).catch(()=>undefined);return()=>{active=false;};},[session?.user.role]);
+
   if (error) return <StatusAlert tone="error">{error}</StatusAlert>;
   if (!stats) return <LoadingState label="Calculando filas operacionais..." />;
 
-  const cards = [
-    ['Urgentes/Emergenciais', stats.urgentOrEmergency, AlertTriangle, 'criticalPriority=true'],
-    ['SLA vencido', stats.slaBreached, Clock3, 'slaStatus=BREACHED'],
-    ['Sem encaminhamento', stats.withoutRouting, Route, 'withoutRouting=true'],
-    ['Em atendimento', stats.inService, Wrench, 'status=Em+atendimento'],
-    ['Aguardando providência', stats.awaitingAction, Inbox, 'awaitingAction=true'],
-    ['Resolvidas recentemente', stats.resolvedRecently, CheckCircle2, 'status=Resolvida'],
-  ] as const;
+  const isAttendant = session?.user.role === 'Atendente';
 
-  const queues = [
-    ['Requerem atenção imediata', stats.urgentOrEmergency, 'criticalPriority=true'],
-    ['Sem encaminhamento', stats.withoutRouting, 'withoutRouting=true'],
-    ['SLA vencido', stats.slaBreached, 'slaStatus=BREACHED'],
-    ['Aguardando providência', stats.awaitingAction, 'awaitingAction=true'],
-  ] as const;
+  const cards = isAttendant
+    ? ([
+        ['Urgentes/Emergenciais', stats.urgentOrEmergency, AlertTriangle, 'criticalPriority=true'],
+        ['SLA vencido', stats.slaBreached, Clock3, 'slaStatus=BREACHED'],
+        ['Em atendimento', stats.inService, Wrench, 'status=Em+atendimento'],
+        ['Aguardando providência', stats.awaitingAction, Inbox, 'awaitingAction=true'],
+        ['Resolvidas recentemente', stats.resolvedRecently, CheckCircle2, 'status=Resolvida'],
+      ] as const)
+    : ([
+        ['Urgentes/Emergenciais', stats.urgentOrEmergency, AlertTriangle, 'criticalPriority=true'],
+        ['SLA vencido', stats.slaBreached, Clock3, 'slaStatus=BREACHED'],
+        ['Sem encaminhamento', stats.withoutRouting, Route, 'withoutRouting=true'],
+        ['Em atendimento', stats.inService, Wrench, 'status=Em+atendimento'],
+        ['Aguardando providência', stats.awaitingAction, Inbox, 'awaitingAction=true'],
+        ['Resolvidas recentemente', stats.resolvedRecently, CheckCircle2, 'status=Resolvida'],
+      ] as const);
+
+  const queues = isAttendant
+    ? ([
+        ['Requerem atenção imediata', stats.urgentOrEmergency, 'criticalPriority=true'],
+        ['SLA vencido', stats.slaBreached, 'slaStatus=BREACHED'],
+        ['Aguardando providência', stats.awaitingAction, 'awaitingAction=true'],
+        ['Em atendimento', stats.inService, 'status=Em+atendimento'],
+      ] as const)
+    : ([
+        ['Requerem atenção imediata', stats.urgentOrEmergency, 'criticalPriority=true'],
+        ['Sem encaminhamento', stats.withoutRouting, 'withoutRouting=true'],
+        ['SLA vencido', stats.slaBreached, 'slaStatus=BREACHED'],
+        ['Aguardando providência', stats.awaitingAction, 'awaitingAction=true'],
+      ] as const);
 
   return <div className="space-y-6">
-    <div><h1 className="text-3xl font-bold">Painel administrativo</h1><p className="mt-2 text-sm text-slate-700">Visão operacional enxuta das filas que exigem decisão ou acompanhamento.</p></div>
+    <div><h1 className="text-3xl font-bold">Painel administrativo</h1><p className="mt-2 text-sm text-slate-700">{isAttendant ? 'Visão operacional das ocorrências sob sua responsabilidade direta.' : 'Visão operacional enxuta das filas que exigem decisão ou acompanhamento.'}</p></div>
     {newData && <StatusAlert>Há novas informações disponíveis. <button className="font-semibold underline" onClick={() => void load()}>Atualizar agora</button></StatusAlert>}
+    {infrastructure !== null && (
+      <div className="space-y-2" aria-label="Alertas de infraestrutura">
+        {Object.entries(infrastructure.levels)
+          .filter(([, value]) => value.level !== 'Normal' && value.level !== 'Não medido')
+          .map(([key, value]) => {
+            const metricKey = key as keyof typeof CAPACITY_METRIC_LABELS;
+            const label = CAPACITY_METRIC_LABELS[metricKey] ?? key;
+            return (
+              <StatusAlert key={key}>
+                Capacidade {label}: nível {value.level} {formatCapacityPercent(value.percent)}. <Link className="font-semibold underline" to={ROUTES.adminInfrastructure}>Abrir Infraestrutura e capacidade</Link>
+              </StatusAlert>
+            );
+          })}
+        {(infrastructure.latest?.cleanup.pendingTasks ?? 0) > 0 && (
+          <StatusAlert>
+            Há {infrastructure.latest?.cleanup.pendingTasks} tarefa(s) de limpeza pendente(s). <Link className="font-semibold underline" to={ROUTES.adminInfrastructure}>Revisar</Link>
+          </StatusAlert>
+        )}
+        {(infrastructure.latest?.notifications.failed ?? 0) > 0 && (
+          <StatusAlert>
+            Há {infrastructure.latest?.notifications.failed} notificação(ões) com falha. <Link className="font-semibold underline" to={ROUTES.adminInfrastructure}>Revisar</Link>
+          </StatusAlert>
+        )}
+        {(infrastructure.latest?.artifactRegistry.capturedAt === null ||
+          infrastructure.latest?.artifactRegistry.capturedAt === undefined ||
+          renderedAt - new Date(infrastructure.latest.artifactRegistry.capturedAt).getTime() > 31 * 86_400_000) && (
+          <StatusAlert>
+            O levantamento do Artifact Registry não foi coletado ou está desatualizado. <Link className="font-semibold underline" to={ROUTES.adminInfrastructure}>Revisar</Link>
+          </StatusAlert>
+        )}
+      </div>
+    )}
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{cards.map(([label, value, Icon, query]) => <Link key={label} to={`${ROUTES.adminOccurrences}?${query}`} className="border border-slate-300 bg-white p-4 hover:border-green-700 focus:outline-none focus:ring-2 focus:ring-green-800"><Icon className="h-5 w-5 text-green-800" aria-hidden="true"/><p className="mt-3 text-3xl font-bold">{value}</p><p className="text-sm font-semibold text-slate-700">{label}</p></Link>)}</div>
-    <section className="border border-slate-300 bg-white" aria-labelledby="operational-queues"><div className="border-b border-slate-300 bg-slate-50 px-4 py-3"><h2 id="operational-queues" className="font-bold">Filas operacionais</h2><p className="text-sm text-slate-600">Atalhos para as prioridades de acompanhamento cotidiano.</p></div><ul>{queues.map(([label, value, query]) => <li key={label} className="border-b border-slate-200 last:border-b-0"><Link className="flex items-center justify-between gap-4 px-4 py-3 font-semibold text-green-900 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-800" to={`${ROUTES.adminOccurrences}?${query}`}><span>{label}</span><span aria-label={`${value} ocorrência(s)`}>{value}</span></Link></li>)}</ul></section>
-    <div className="border border-slate-300 bg-slate-50 p-4"><strong>Novas hoje:</strong> {stats.receivedToday}. <Link className="ml-2 font-semibold text-green-800 underline" to={ROUTES.adminAnalytics}>Abrir indicadores</Link></div>
+    <section className="border border-slate-300 bg-white" aria-labelledby="operational-queues"><div className="border-b border-slate-300 bg-slate-50 px-4 py-3"><h2 id="operational-queues" className="font-bold">Filas operacionais</h2><p className="text-sm text-slate-600">{isAttendant ? 'Minhas ocorrências nas principais situações.' : 'Atalhos para as prioridades de acompanhamento cotidiano.'}</p></div><ul>{queues.map(([label, value, query]) => <li key={label} className="border-b border-slate-200 last:border-b-0"><Link className="flex items-center justify-between gap-4 px-4 py-3 font-semibold text-green-900 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-800" to={`${ROUTES.adminOccurrences}?${query}`}><span>{label}</span><span aria-label={`${value} ocorrência(s)`}>{value}</span></Link></li>)}</ul></section>
+    {!isAttendant && <div className="border border-slate-300 bg-slate-50 p-4"><strong>Novas hoje:</strong> {stats.receivedToday}. <Link className="ml-2 font-semibold text-green-800 underline" to={ROUTES.adminAnalytics}>Abrir indicadores</Link></div>}
   </div>;
 }

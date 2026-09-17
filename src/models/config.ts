@@ -1,4 +1,4 @@
-import { APP_VERSION } from '../config/version';
+import type { APP_VERSION } from '../config/version';
 
 export interface CategoryItem {
   id: string;
@@ -40,6 +40,7 @@ export interface SystemConfig {
   institutionDisplayName: string;
   protocolPrefix: string;
   notificationEmails: string[];
+  emailNotificationsEnabled: boolean;
   autoAssignRisk: boolean;
   serviceNotice: string;
 }
@@ -53,11 +54,13 @@ export interface RuntimeInfo {
   adminAuthorization: 'firestore';
   occurrencePersistence: 'firestore';
   referenceDataPersistence: 'firestore';
-  photoStorage: 'firebase-storage';
+  photoStorage: 'cloudflare-r2' | 'firebase-storage-emulator';
   photoUploadEnabled: true;
   maxInitialPhotos: 3;
   maxResolutionPhotos: 3;
-  emailDelivery: false;
+  emailDelivery: boolean;
+  frontendHosting: 'cloudflare-pages';
+  backendRuntime: 'cloud-run';
   appCheckEnforced: boolean;
 }
 export interface BootstrapData {

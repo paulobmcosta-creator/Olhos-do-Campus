@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "olhos-do-campus-maintenance",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-18",
+  "triggers": {
+    "crons": ["*/10 * * * *", "15 3 * * *"]
+  },
+  "vars": {
+    "BACKEND_URL": "https://olhos-do-campus-hnwfymhsqq-uw.a.run.app"
+  }
+}

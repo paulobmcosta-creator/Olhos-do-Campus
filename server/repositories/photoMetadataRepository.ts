@@ -2,6 +2,11 @@ import type { DocumentData, DocumentSnapshot, Firestore, QueryDocumentSnapshot }
 import { Timestamp } from 'firebase-admin/firestore';
 import type { StoredPhotoMetadata } from '../models/photoDomain';
 
+export interface PhotoMetadataInventoryItem {
+  occurrenceId: string;
+  photo: StoredPhotoMetadata;
+}
+
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() !== '' ? value : undefined;
 }
@@ -64,6 +69,7 @@ export interface PhotoMetadataRepository {
   listByOccurrenceId(occurrenceId: string): Promise<StoredPhotoMetadata[]>;
   getById(occurrenceId: string, photoId: string): Promise<StoredPhotoMetadata | undefined>;
   countReadyByKind(occurrenceId: string, kind: StoredPhotoMetadata['kind']): Promise<number>;
+  listInventoryPage(cursor?: string, limit?: number): Promise<{ items: PhotoMetadataInventoryItem[]; nextCursor?: string }>;
 }
 
 export class FirestorePhotoMetadataRepository implements PhotoMetadataRepository {
@@ -83,5 +89,17 @@ export class FirestorePhotoMetadataRepository implements PhotoMetadataRepository
     const snapshot = await this.firestore.collection('occurrences').doc(occurrenceId).collection('photos')
       .where('kind', '==', kind).where('status', '==', 'READY').count().get();
     return snapshot.data().count;
+  }
+
+  public async listInventoryPage(cursor?: string, limit = 500): Promise<{ items: PhotoMetadataInventoryItem[]; nextCursor?: string }> {
+    let query = this.firestore.collectionGroup('photos').orderBy('__name__').limit(Math.min(Math.max(limit, 1), 1000));
+    if (cursor !== undefined) query = query.startAfter(this.firestore.doc(cursor));
+    const snapshot = await query.get();
+    const items = snapshot.docs.map((document) => ({
+      occurrenceId: document.ref.parent.parent?.id ?? '',
+      photo: snapshotToPhotoMetadata(document),
+    }));
+    const last = snapshot.docs.at(-1);
+    return { items, ...(snapshot.size === Math.min(Math.max(limit, 1), 1000) && last !== undefined ? { nextCursor: last.ref.path } : {}) };
   }
 }

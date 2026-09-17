@@ -1,4 +1,4 @@
-export const ADMIN_ROLES = ['Administrador', 'Gestor'] as const;
+export const ADMIN_ROLES = ['Administrador', 'Gestor', 'Atendente'] as const;
 export type AdminRole = (typeof ADMIN_ROLES)[number];
 export const LEGACY_ADMIN_ROLES = ['Atendente'] as const;
 export type LegacyAdminRole = (typeof LEGACY_ADMIN_ROLES)[number];
@@ -68,7 +68,7 @@ export interface AdminUserUpdateInput {
 }
 
 export interface LegacyAdminResolutionInput {
-  action: 'CONVERT_TO_MANAGER' | 'DEACTIVATE';
+  action: 'CONVERT_TO_MANAGER' | 'DEACTIVATE' | 'ACTIVATE_AS_ATTENDANT';
 }
 
 export const AUDIT_EVENT_TYPES = [
@@ -77,16 +77,20 @@ export const AUDIT_EVENT_TYPES = [
   'LEGACY_ADMIN_ROLE_RESOLVED', 'LAST_ADMIN_CHANGE_BLOCKED', 'SYSTEM_CONFIG_UPDATED',
   'OCCURRENCE_STATUS_CHANGED', 'OCCURRENCE_CATEGORY_CHANGED', 'OCCURRENCE_LOCATION_CHANGED',
   'OCCURRENCE_PRIORITY_CHANGED', 'OCCURRENCE_TEAM_CHANGED', 'OCCURRENCE_RESPONSIBLE_CHANGED',
+  'OCCURRENCE_TEAM_ROUTED', 'OCCURRENCE_RESPONSIBLE_ASSIGNED',
   'OCCURRENCE_REOPENED', 'OCCURRENCE_RESOLVED', 'OCCURRENCE_CLOSED', 'PUBLIC_MESSAGE_ADDED',
   'INTERNAL_NOTE_ADDED', 'CATEGORY_CREATED', 'CATEGORY_UPDATED', 'CATEGORY_DEACTIVATED',
-  'LOCATION_CREATED', 'LOCATION_UPDATED', 'LOCATION_DEACTIVATED', 'TEAM_CREATED', 'TEAM_UPDATED',
-  'TEAM_DEACTIVATED', 'SLA_CONFIG_UPDATED', 'SERVICE_CALENDAR_UPDATED',
+  'LOCATION_CREATED', 'LOCATION_UPDATED', 'LOCATION_DEACTIVATED', 'LOCATION_REACTIVATED', 'LOCATION_DELETED',
+  'TEAM_CREATED', 'TEAM_UPDATED', 'TEAM_DEACTIVATED', 'TEAM_INITIAL_INTAKE_CHANGED', 'SLA_CONFIG_UPDATED', 'SERVICE_CALENDAR_UPDATED',
   'SERVICE_CALENDAR_EXCEPTION_CREATED', 'SERVICE_CALENDAR_EXCEPTION_UPDATED',
   'SERVICE_CALENDAR_EXCEPTION_DELETED', 'TEST_OCCURRENCE_DELETED', 'REPORT_EXPORTED',
+  'NOTIFICATION_SETTINGS_CHANGED', 'NOTIFICATION_TEST_REQUESTED', 'NOTIFICATION_RETRY_REQUESTED',
+  'INFRASTRUCTURE_SETTINGS_CHANGED', 'INFRASTRUCTURE_SNAPSHOT_REQUESTED', 'FIRESTORE_ESTIMATE_REQUESTED',
+  'STORAGE_RECONCILIATION_REQUESTED', 'STORAGE_CLEANUP_REQUESTED',
 ] as const;
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
 
-export type AuditTargetType = 'adminUser' | 'adminSession' | 'security' | 'systemConfig' | 'occurrence' | 'category' | 'location' | 'team' | 'sla' | 'calendar' | 'report';
+export type AuditTargetType = 'adminUser' | 'adminSession' | 'security' | 'systemConfig' | 'occurrence' | 'category' | 'location' | 'team' | 'sla' | 'calendar' | 'report' | 'notification' | 'infrastructure' | 'storage';
 
 export interface AuditLog {
   id: string;

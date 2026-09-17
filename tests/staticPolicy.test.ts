@@ -101,13 +101,13 @@ describe('políticas institucionais, segurança e ambiente', () => {
   it('mantém as remediações de dependências de segurança herdadas da 0.5.1 fixadas no lockfile', () => {
     const manifest = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')) as { dependencies?: Record<string, string>; overrides?: Record<string, unknown> };
     const lock = JSON.parse(readFileSync(join(projectRoot, 'package-lock.json'), 'utf8')) as { packages?: Record<string, { version?: string }> };
-    expect(manifest.dependencies?.sharp).toBe('0.35.3');
+    expect(manifest.dependencies?.sharp).toBe('0.35.4');
     expect(manifest.overrides).toMatchObject({
       '@opentelemetry/core': '2.8.0',
       gaxios: { uuid: '11.1.1' },
       'teeny-request': { uuid: '11.1.1' },
     });
-    expect(lock.packages?.['node_modules/sharp']?.version).toBe('0.35.3');
+    expect(lock.packages?.['node_modules/sharp']?.version).toBe('0.35.4');
     expect(lock.packages?.['node_modules/uuid']?.version).toBe('11.1.1');
     expect(lock.packages?.['node_modules/nanoid']?.version).toBe('3.3.18');
     expect(lock.packages?.['node_modules/@opentelemetry/core']?.version).toBe('2.8.0');

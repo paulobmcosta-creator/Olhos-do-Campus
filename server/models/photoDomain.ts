@@ -59,4 +59,5 @@ export interface StorageCleanupTask {
   createdAt: Date;
   updatedAt: Date;
   lastError?: string;
+  storageProvider: 'r2' | 'firebase-storage';
 }

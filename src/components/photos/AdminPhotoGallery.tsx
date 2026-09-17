@@ -1,6 +1,7 @@
 import { Eye, EyeOff, ImagePlus, Maximize2, Trash2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
 import type { AdminRole } from '../../models/admin';
 import type { Occurrence, OccurrencePhoto } from '../../models/occurrence';
 import { ApiError } from '../../services/apiClient';
@@ -34,7 +35,7 @@ function PhotoGroup({
   photos: OccurrencePhoto[];
   role: AdminRole;
   thumbnailUrls: ReadonlyMap<string, string>;
-  onOpen: (photo: OccurrencePhoto) => void;
+  onOpen: (photo: OccurrencePhoto, triggerEl?: HTMLElement | null) => void;
   onVisibility: (photo: OccurrencePhoto) => void;
   onDelete: (photo: OccurrencePhoto) => void;
   busyPhotoId: string | null;
@@ -56,7 +57,7 @@ function PhotoGroup({
                 <button
                   type="button"
                   className="block w-full border border-slate-300 bg-white p-1 focus:outline-none focus:ring-2 focus:ring-green-800"
-                  onClick={() => onOpen(photo)}
+                  onClick={(e) => onOpen(photo, e.currentTarget)}
                   aria-label={`Abrir fotografia ${index + 1} de ${title.toLowerCase()} em tamanho maior`}
                 >
                   {thumbnailUrl === undefined
@@ -69,7 +70,7 @@ function PhotoGroup({
                   </span>
                   <span className="text-xs text-slate-500">{photo.width} × {photo.height}px</span>
                 </div>
-                <button type="button" className="btn-secondary mt-3 w-full" onClick={() => onOpen(photo)}>
+                <button type="button" className="btn-secondary mt-3 w-full" onClick={(e) => onOpen(photo, e.currentTarget)}>
                   <Maximize2 className="h-4 w-4" aria-hidden="true" />Ampliar
                 </button>
                 {canManage && photo.kind === 'RESOLUTION' && (
@@ -107,6 +108,7 @@ export function AdminPhotoGallery({ occurrence, role, onOccurrenceUpdated }: Adm
   const [uploading, setUploading] = useState(false);
   const [prepared, setPrepared] = useState<PreparedClientPhoto[]>([]);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
   const preparedRef = useRef<PreparedClientPhoto[]>([]);
   const fullImageRef = useRef<FullImageState | null>(null);
 
@@ -154,25 +156,24 @@ export function AdminPhotoGallery({ occurrence, role, onOccurrenceUpdated }: Adm
     };
   }, [occurrence.id, occurrence.photos, occurrence.version]);
 
-  useEffect(() => {
-    if (fullImage === null) return;
-    closeRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        URL.revokeObjectURL(fullImage.url);
-        setFullImage(null);
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [fullImage]);
-
-  const closeFull = (): void => {
+  const closeFull = useCallback((): void => {
     if (fullImage !== null) URL.revokeObjectURL(fullImage.url);
     setFullImage(null);
-  };
+  }, [fullImage]);
 
-  const openFull = async (photo: OccurrencePhoto): Promise<void> => {
+  const { setTriggerElement } = useModalFocusTrap({
+    isOpen: fullImage !== null,
+    onClose: closeFull,
+    containerRef: modalRef,
+    initialFocusRef: closeRef,
+  });
+
+  const openFull = async (photo: OccurrencePhoto, triggerEl?: HTMLElement | null): Promise<void> => {
+    if (triggerEl) {
+      setTriggerElement(triggerEl);
+    } else if (document.activeElement instanceof HTMLElement) {
+      setTriggerElement(document.activeElement);
+    }
     setError(null);
     setBusyPhotoId(photo.id);
     try {
@@ -269,17 +270,17 @@ export function AdminPhotoGallery({ occurrence, role, onOccurrenceUpdated }: Adm
 
   return (
     <div className="space-y-6">
-      <PhotoGroup title="Fotografias do registro" photos={initialPhotos} role={role} thumbnailUrls={thumbnailUrls} onOpen={(photo) => void openFull(photo)} onVisibility={(photo) => void updateVisibility(photo)} onDelete={(photo) => void deletePhoto(photo)} busyPhotoId={busyPhotoId} />
-      <PhotoGroup title="Fotografias da solução" photos={resolutionPhotos} role={role} thumbnailUrls={thumbnailUrls} onOpen={(photo) => void openFull(photo)} onVisibility={(photo) => void updateVisibility(photo)} onDelete={(photo) => void deletePhoto(photo)} busyPhotoId={busyPhotoId} />
+      <PhotoGroup title="Fotografias do registro" photos={initialPhotos} role={role} thumbnailUrls={thumbnailUrls} onOpen={(photo, el) => void openFull(photo, el)} onVisibility={(photo) => void updateVisibility(photo)} onDelete={(photo) => void deletePhoto(photo)} busyPhotoId={busyPhotoId} />
+      <PhotoGroup title="Fotografias da solução" photos={resolutionPhotos} role={role} thumbnailUrls={thumbnailUrls} onOpen={(photo, el) => void openFull(photo, el)} onVisibility={(photo) => void updateVisibility(photo)} onDelete={(photo) => void deletePhoto(photo)} busyPhotoId={busyPhotoId} />
 
       <section className="border border-slate-300 p-5" aria-labelledby="solution-upload-heading">
         <h2 id="solution-upload-heading" className="text-lg font-bold text-slate-950">Adicionar fotografia da solução</h2>
         <p className="mt-2 text-sm leading-6 text-slate-700">Até 3 fotografias de solução podem permanecer ativas. Novas imagens são internas por padrão e não se tornam públicas automaticamente.</p>
         {remainingResolutionSlots > 0 ? (
           <>
-            <label className="btn-secondary mt-4 inline-flex cursor-pointer">
+            <label className="btn-secondary mt-4 inline-flex cursor-pointer has-[:focus-visible]:outline has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-[#166534] has-[:focus-visible]:outline-offset-2">
               <ImagePlus className="h-4 w-4" aria-hidden="true" />Selecionar fotografia(s)
-              <input className="sr-only" type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(event) => void handleSelect(event)} disabled={uploading} />
+              <input aria-label="Selecionar fotografias da solução" className="sr-only" type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(event) => void handleSelect(event)} disabled={uploading} />
             </label>
             {prepared.length > 0 && (
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -301,7 +302,7 @@ export function AdminPhotoGallery({ occurrence, role, onOccurrenceUpdated }: Adm
       </section>
 
       {fullImage !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4" role="dialog" aria-modal="true" aria-label="Visualização ampliada da fotografia">
+        <div ref={modalRef} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4" role="dialog" aria-modal="true" aria-label="Visualização ampliada da fotografia">
           <div className="max-h-[95vh] w-full max-w-5xl overflow-auto bg-white p-4 shadow-xl">
             <div className="flex justify-end">
               <button ref={closeRef} type="button" className="btn-secondary" onClick={closeFull}><X className="h-4 w-4" aria-hidden="true" />Fechar</button>

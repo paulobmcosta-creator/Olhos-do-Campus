@@ -180,7 +180,7 @@ describe('API protegida de fotografias administrativas e públicas', () => {
       await createWith();
       const occurrence = await firstOccurrence(token);
       const withPhoto = await addResolution(occurrence.id, occurrence.version, token);
-      const photo = withPhoto.photos.find((item) => item.kind === 'RESOLUTION')!;
+      const photo = withPhoto.photos.find((item) => item.kind === 'RESOLUTION' && item.status === 'READY')!;
       const publish = await fetch(`${harness.baseUrl}/api/admin/occurrences/${occurrence.id}/photos/${photo.id}/visibility`, {
         method: 'PATCH', headers: headers(token), body: JSON.stringify({ expectedVersion: withPhoto.version, visibility: 'PUBLIC' }),
       });

@@ -1,12 +1,13 @@
 import type { StoredPhotoMetadata, StorageCleanupTask } from '../../server/models/photoDomain';
 import type { PhotoMetadataRepository } from '../../server/repositories/photoMetadataRepository';
-import type { PhotoObjectInfo, PhotoObjectMetadata, PhotoRepository } from '../../server/repositories/photoRepository';
+import type { PhotoObjectInfo, PhotoObjectMetadata, PhotoObjectPage, PhotoRepository } from '../../server/repositories/photoRepository';
 import type { StorageCleanupTaskRepository } from '../../server/repositories/storageCleanupTaskRepository';
 import { ImageProcessingService } from '../../server/services/imageProcessingService';
 import { PhotoService } from '../../server/services/photoService';
 import type { FakePhotoMutationSink } from './fakeRepositories';
 
 export class InMemoryPhotoObjectRepository implements PhotoRepository {
+  public readonly provider = 'r2' as const;
   private readonly objects = new Map<string, { buffer: Buffer; metadata: PhotoObjectMetadata }>();
   public readonly deletedPaths: string[] = [];
   public failSaveAtCall?: number;
@@ -49,6 +50,16 @@ export class InMemoryPhotoObjectRepository implements PhotoRepository {
     };
   }
 
+  public listPage(prefix: string, cursor?: string, limit = 500): Promise<PhotoObjectPage> {
+    const paths = [...this.objects.keys()].filter((path) => path.startsWith(prefix)).sort();
+    const start = cursor === undefined ? 0 : Math.max(0, paths.findIndex((path) => path === cursor) + 1);
+    const selected = paths.slice(start, start + limit);
+    return Promise.resolve({
+      items: selected.map((path) => ({ path, size: this.objects.get(path)?.buffer.length })),
+      ...(start + selected.length < paths.length && selected.at(-1) !== undefined ? { nextCursor: selected.at(-1) } : {}),
+    });
+  }
+
   public paths(): string[] { return [...this.objects.keys()].sort(); }
 }
 
@@ -84,6 +95,15 @@ export class InMemoryPhotoMetadataRepository implements PhotoMetadataRepository,
     return items.filter((item) => item.kind === kind && item.status === 'READY').length;
   }
 
+  public listInventoryPage(cursor?: string, limit = 500): Promise<{ items: Array<{ occurrenceId: string; photo: StoredPhotoMetadata }>; nextCursor?: string }> {
+    const items = [...this.byOccurrence.entries()].flatMap(([occurrenceId, photos]) => [...photos.values()].map((photo) => ({ occurrenceId, photo: structuredClone(photo) })))
+      .sort((left, right) => `${left.occurrenceId}/${left.photo.id}`.localeCompare(`${right.occurrenceId}/${right.photo.id}`));
+    const start = cursor === undefined ? 0 : Math.max(0, items.findIndex((item) => `${item.occurrenceId}/${item.photo.id}` === cursor) + 1);
+    const selected = items.slice(start, start + limit);
+    const last = selected.at(-1);
+    return Promise.resolve({ items: selected, ...(start + selected.length < items.length && last !== undefined ? { nextCursor: `${last.occurrenceId}/${last.photo.id}` } : {}) });
+  }
+
   public deleteOccurrence(occurrenceId: string): void { this.byOccurrence.delete(occurrenceId); }
 }
 
@@ -91,10 +111,10 @@ export class InMemoryStorageCleanupTaskRepository implements StorageCleanupTaskR
   private readonly tasks = new Map<string, StorageCleanupTask>();
   private sequence = 0;
 
-  public create(storagePaths: string[], reason: string): Promise<string> {
+  public create(storagePaths: string[], reason: string, storageProvider: 'r2' | 'firebase-storage' = 'r2'): Promise<string> {
     const id = `cleanup-${++this.sequence}`;
     const now = new Date();
-    this.tasks.set(id, { id, storagePaths: [...new Set(storagePaths)], reason, status: 'PENDING', attempts: 0, createdAt: now, updatedAt: now });
+    this.tasks.set(id, { id, storagePaths: [...new Set(storagePaths)], reason, storageProvider, status: 'PENDING', attempts: 0, createdAt: now, updatedAt: now });
     return Promise.resolve(id);
   }
 
@@ -112,6 +132,10 @@ export class InMemoryStorageCleanupTaskRepository implements StorageCleanupTaskR
     const task = this.tasks.get(taskId);
     if (task !== undefined) this.tasks.set(taskId, { ...task, attempts: task.attempts + 1, lastError, updatedAt: new Date() });
     return Promise.resolve();
+  }
+
+  public listRecent(limit = 200): Promise<StorageCleanupTask[]> {
+    return Promise.resolve([...this.tasks.values()].sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime()).slice(0, limit).map((task) => structuredClone(task)));
   }
 }
 

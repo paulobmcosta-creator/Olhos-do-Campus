@@ -1,4 +1,12 @@
-# Painel administrativo — 0.6.0
+# Painel administrativo — base 0.6.0, atualizado na 0.7.0
+
+## Extensões da 0.7.0
+
+O dashboard preserva as filas da 0.6.0 e adiciona alertas agregados de capacidade, cleanup, falhas de notificação e snapshot desatualizado do Artifact Registry para o Administrador. O link “Infraestrutura e capacidade” e sua API são exclusivos do Administrador.
+
+A página `/administracao/infraestrutura` contém resumo textual, tabelas com cabeçalhos, histórico 30/90/365 dias, gráfico SVG com alternativa tabular, referências configuráveis e ações manuais de snapshot, estimativa lógica paginada do Firestore, reconciliação, cleanup e retry. Cards reorganizam em coluna e tabelas densas usam overflow local em telas pequenas. Status não depende apenas de cor.
+
+A área de configurações passou a expor `notificationEmails` e `emailNotificationsEnabled`, além de status/teste do Resend. O Gestor continua sem acesso a configurações estruturais, auditoria global, notificações ou infraestrutura.
 
 ## Dashboard
 

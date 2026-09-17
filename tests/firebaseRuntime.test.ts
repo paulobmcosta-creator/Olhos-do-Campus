@@ -73,6 +73,7 @@ describe('resolução da integração Firebase gerenciada 0.6.0', () => {
       emulatorMode: false,
       firebaseProjectId: 'outro-projeto',
       appletConfig: APPLET,
+      requireStorageBucket: true,
     })).toThrow(/FIREBASE_STORAGE_BUCKET é obrigatório/iu);
   });
 
@@ -130,7 +131,7 @@ describe('resolução da integração Firebase gerenciada 0.6.0', () => {
       ...APPLET,
       apiKey: 'valor-público-ignorado-no-servidor',
     })).toEqual(APPLET);
-    expect(() => parseFirebaseAppletRuntimeConfig({ projectId: APPLET.projectId, firestoreDatabaseId: APPLET.firestoreDatabaseId })).toThrow(/storageBucket/iu);
+    expect(parseFirebaseAppletRuntimeConfig({ projectId: APPLET.projectId, firestoreDatabaseId: APPLET.firestoreDatabaseId })).toEqual({ projectId: APPLET.projectId, firestoreDatabaseId: APPLET.firestoreDatabaseId });
   });
 
   it('rejeita bucket vazio, URL, caminho e caracteres inválidos', () => {

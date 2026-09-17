@@ -1,30 +1,28 @@
-# Tratamento de arquivos órfãos — versão 0.5.0
+# Tratamento de arquivos órfãos — versão 0.7.0
 
-## Problema
+R2 e Firestore não compartilham transação atômica. Uma falha Firestore após upload pode deixar bytes órfãos; uma falha do provider após tombstone pode deixar objeto pendente.
 
-Cloud Storage e Firestore não oferecem transação atômica comum. Uma falha Firestore após upload pode deixar objeto órfão; uma falha Storage após exclusão lógica pode deixar bytes sem acesso lógico.
+## Compensação e tarefas
 
-## Compensação
-
-`PhotoService.compensate()` tenta apagar todos os paths envolvidos, eliminando duplicidades. O repository trata objeto inexistente como sucesso. Se alguma exclusão falhar, é criada tarefa persistente em `storageCleanupTasks`.
-
-## Tarefa
-
-Campos: `storagePaths`, `reason`, `status`, `attempts`, `createdAt`, `updatedAt`, `lastError`. Não contém dados pessoais.
-
-## Execução
+`PhotoService` tenta excluir, de forma idempotente, todos os paths de uma operação parcial. Se alguma exclusão falhar, grava `storageCleanupTasks` com provider, paths, motivo, estado, tentativas, timestamps e erro sanitizado; a tarefa não contém PII.
 
 ```bash
 npm run storage:cleanup
 ```
 
-O script:
-- processa apenas tarefas `PENDING` válidas;
-- tenta exclusão idempotente;
-- considera objeto ausente como concluído;
-- marca `COMPLETED` ao finalizar;
-- em erro incrementa `attempts` e registra erro operacional sanitizado;
-- não lista o bucket para decidir o que excluir;
-- não apaga objetos sem tarefa persistente.
+O processador atua somente em tarefas `PENDING`, limita o lote, considera objeto ausente como sucesso, marca conclusão ou incrementa tentativa. Administrador e Maintenance Worker também podem processar a fila.
 
-Não há Cloud Function agendada na 0.5.0.
+## Reconciliação independente
+
+```bash
+npm run storage:reconcile -- --dry-run
+```
+
+Ela pagina metadados Firestore e objetos R2, encontra metadados sem objeto, objetos sem metadata e divergências de tamanho. O limite evita scan/memória sem controle. Inventário truncado é marcado incompleto e nunca autoriza exclusão.
+
+```bash
+npm run storage:reconcile -- --apply
+```
+
+Apply só remove órfãos se o inventário for completo e o objeto for anterior à janela configurada. Não apaga ocorrência, metadata válida, foto referenciada ou histórico. O resultado agregado é registrado para o painel. Esta rotina não substitui backup nem cria política de retenção.
+

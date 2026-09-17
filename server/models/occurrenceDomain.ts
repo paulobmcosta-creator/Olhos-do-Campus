@@ -98,4 +98,6 @@ export interface NewOccurrenceRecord {
   dataClassification: DataClassification;
   sla?: StoredOccurrenceSla;
   searchTokens: string[];
+  assignedTeamId?: string;
+  assignedTeamNameSnapshot?: string;
 }

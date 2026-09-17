@@ -33,6 +33,12 @@ describe('regras server-only do Firestore', () => {
       'occurrences/occ-1/events/event-1',
       'occurrences/occ-1/photos/photo-1',
       'storageCleanupTasks/task-1',
+      'notificationOutbox/delivery-1',
+      'notificationWebhookEvents/event-1',
+      'infrastructureUsageSnapshots/daily-2026-08-18',
+      'infrastructureCapacitySettings/default',
+      'storageReconciliationReports/latest',
+      'artifactRegistrySnapshots/snapshot-1',
       'protocolCounters/2026',
       'categories/cat-iluminacao',
       'locations/ifes-bsf',
@@ -48,7 +54,7 @@ describe('regras server-only do Firestore', () => {
         await assertFails(setDoc(reference, { test: true }));
         await assertFails(deleteDoc(reference));
       }
-      for (const path of ['occurrences', 'protocolCounters', 'categories', 'locations', 'systemSettings', 'adminUsers', 'auditLogs', 'storageCleanupTasks']) {
+      for (const path of ['occurrences', 'protocolCounters', 'categories', 'locations', 'systemSettings', 'adminUsers', 'auditLogs', 'storageCleanupTasks', 'notificationOutbox', 'notificationWebhookEvents', 'infrastructureUsageSnapshots', 'infrastructureCapacitySettings', 'storageReconciliationReports', 'artifactRegistrySnapshots']) {
         await assertFails(getDocs(collection(firestore, path)));
       }
       await assertFails(getDocs(collection(firestore, 'occurrences/occ-1/events')));

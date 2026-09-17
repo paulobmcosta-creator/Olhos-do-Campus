@@ -1,26 +1,27 @@
 {
-  "version": "0.6.2",
+  "version": "1.0.0",
   "project": "Olhos do Campus",
   "institution": "Instituto Federal do Espírito Santo — Campus Barra de São Francisco",
   "architecture": {
     "webClientDirectFirestoreAccess": false,
     "webClientDirectStorageAccess": false,
-    "dataPath": "Frontend → Express API → App Check → Auth → Authorization → Service → Repository → Firebase Admin"
+    "dataPath": "Cloudflare Pages → Cloud Run API → App Check → Auth → Authorization → Service → Firestore/R2/EWS/Resend"
   },
   "entities": {
     "AdminUser": {
       "collection": "adminUsers",
       "schemaVersion": 1,
-      "description": "Conta administrativa do contrato introduzido na versão 0.6.0. Papéis válidos no contrato ativo: Administrador e Gestor. Valores históricos fora desse contrato são tratados exclusivamente pelo procedimento de migração segura.",
+      "description": "Conta administrativa do contrato da versão 0.8.0. Papéis válidos no contrato ativo: Administrador, Gestor e Atendente. Registros legados permanecem bloqueados até decisão explícita.",
       "fields": {
         "email": "string",
         "normalizedEmail": "string",
         "uid": "string?",
         "displayName": "string",
-        "role": "Administrador | Gestor",
+        "role": "Administrador | Gestor | Atendente",
         "teamIds": "string[]",
         "department": "string? (legado, não é mecanismo de autorização)",
         "active": "boolean",
+        "legacyRole": "boolean?",
         "createdAt": "Timestamp",
         "createdBy": "string",
         "updatedAt": "Timestamp",
@@ -231,6 +232,92 @@
         "requestCorrelationId": "string?",
         "metadata": "record de metadados operacionais não sensíveis?"
       }
+    },
+    "ProtocolCounter": {
+      "path": "protocolCounters/{year}",
+      "fields": {
+        "lastSequence": "number",
+        "updatedAt": "Timestamp"
+      }
+    },
+    "SystemConfig": {
+      "path": "/systemSettings/operational",
+      "fields": {
+        "notificationEmails": "string[]",
+        "emailNotificationsEnabled": "boolean"
+      }
+    },
+    "NotificationOutbox": {
+      "collection": "notificationOutbox",
+      "description": "Intenção lógica de notificação por destinatário. Mantém estado agregado, lease e cache da tentativa corrente; retries externos individuais ficam na subcoleção attempts.",
+      "fields": {
+        "status": "NotificationStatus",
+        "recipientHash": "sha256",
+        "idempotencyKey": "string (cache da chave da tentativa corrente; legado compatível)",
+        "idempotencySafeUntil": "Timestamp?",
+        "providerAcceptedAt": "Timestamp?",
+        "lastProviderEventAt": "Timestamp?",
+        "lastProviderEventType": "string?",
+        "lastFailureCategory": "string?",
+        "leaseUntil": "Timestamp?",
+        "attemptCount": "number (cache agregado de DeliveryAttempts independentes; retry técnico da mesma tentativa não incrementa)",
+        "currentAttemptId": "sha256?",
+        "providerMessageId": "string? (cache do último providerMessageId; legado 0.7.2 compatível)",
+        "retryMode": "SAME_ATTEMPT | NEW_ATTEMPT? (orienta o próximo claim)",
+        "retrySafety": "IDEMPOTENCY_WINDOW | PROVIDER_REJECTED?"
+      },
+      "schemaVersion": 2
+    },
+    "InfrastructureUsageSnapshot": {
+      "collection": "infrastructureUsageSnapshots",
+      "description": "Métricas técnicas agregadas sem conteúdo pessoal ou de ocorrência."
+    },
+    "NotificationWebhookEvent": {
+      "collection": "notificationWebhookEvents",
+      "description": "Metadados mínimos de webhooks Resend para deduplicação, correlação attempt-aware e reconciliação server-only; nenhum payload bruto é persistido.",
+      "fields": {
+        "eventType": "string",
+        "providerMessageId": "string",
+        "notificationId": "sha256?",
+        "occurredAt": "Timestamp",
+        "status": "UNMATCHED_PENDING | PROCESSED | UNMATCHED_EXPIRED | INCONSISTENT",
+        "firstSeenAt": "Timestamp",
+        "lastAttemptAt": "Timestamp",
+        "attemptCount": "number",
+        "nextAttemptAt": "Timestamp?",
+        "processedAt": "Timestamp?",
+        "targetNotificationId": "sha256?",
+        "lastErrorCode": "string?",
+        "retentionUntil": "Timestamp",
+        "attemptId": "sha256?",
+        "targetAttemptId": "sha256?"
+      }
+    },
+    "NotificationDeliveryAttempt": {
+      "path": "/notificationOutbox/{notificationId}/attempts/{attemptId}",
+      "schemaVersion": 1,
+      "description": "Tentativa externa individual de entrega Resend. Retry técnico reutiliza o mesmo attemptId e a mesma idempotency key; nova tentativa externa cria outro documento somente após decisão segura.",
+      "fields": {
+        "notificationId": "sha256",
+        "attemptNumber": "number",
+        "status": "PROCESSING | RETRY_PENDING | ACCEPTED | UNCERTAIN | DELIVERED | BOUNCED | COMPLAINED | FAILED | SUPPRESSED",
+        "idempotencyKey": "string",
+        "providerAcceptedAt": "Timestamp?",
+        "providerMessageId": "string?",
+        "createdAt": "Timestamp",
+        "startedAt": "Timestamp",
+        "updatedAt": "Timestamp",
+        "completedAt": "Timestamp?",
+        "failureCategory": "string?",
+        "lastErrorCode": "string?",
+        "lastErrorSummary": "string?",
+        "lastProviderEventAt": "Timestamp?",
+        "lastProviderEventType": "string?",
+        "technicalRetryCount": "number (repetições técnicas da mesma DeliveryAttempt; não é consumo nem attemptNumber)",
+        "retryMode": "SAME_ATTEMPT?",
+        "retrySafety": "IDEMPOTENCY_WINDOW | PROVIDER_REJECTED?",
+        "nextAttemptAt": "Timestamp?"
+      }
     }
   },
   "security": {
@@ -241,6 +328,9 @@
     "administrativeAuthentication": "Google Sign-In + allowlist adminUsers",
     "appCheck": true,
     "photoProcessing": "server-only, EXIF removido",
+    "photoStorage": "Cloudflare R2 privado em produção; Firebase Storage somente emulador/migração legada",
+    "notificationDelivery": "EWS institucional (IFES) / Resend server-only com outbox transacional, binding determinístico por provedor, retry técnico idempotente por DeliveryAttempt e ausência de fallback silencioso",
+    "maintenanceAuthentication": "HMAC SHA-256 sobre método, path e timestamp",
     "optimisticLocking": "expectedVersion + HTTP 409"
   }
 }

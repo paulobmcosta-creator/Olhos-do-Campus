@@ -1,10 +1,11 @@
 import type { CampusLocation, CategoryItem, SystemConfig } from '../../src/models/config';
-import type { ServiceCalendar, SlaConfiguration } from '../../src/models/operations';
+import type { OperationalTeam, ServiceCalendar, SlaConfiguration } from '../../src/models/operations';
 
 export const DEFAULT_OPERATIONAL_CONFIG: SystemConfig = {
   institutionDisplayName: 'Instituto Federal do Espírito Santo — Campus Barra de São Francisco',
   protocolPrefix: 'INF',
   notificationEmails: [],
+  emailNotificationsEnabled: false,
   autoAssignRisk: true,
   serviceNotice: 'Canal destinado exclusivamente a problemas relacionados à infraestrutura física.',
 };
@@ -85,3 +86,22 @@ export const DEFAULT_SLA_CONFIG: SlaConfiguration = {
   version: 1,
   updatedAt: new Date(0).toISOString(), updatedBy: 'seed-0.6.0',
 };
+
+export const INITIAL_INTAKE_TEAM: OperationalTeam = {
+  id: 'team-cgao',
+  schemaVersion: 2,
+  name: 'Coordenação Geral de Administração, Orçamento e Finanças',
+  description: 'Equipe responsável pelo acolhimento, triagem e encaminhamento inicial de ocorrências da infraestrutura.',
+  active: true,
+  sortOrder: 1,
+  notificationEmail: 'cgao.bsf@ifes.edu.br',
+  isInitialIntakeTeam: true,
+  memberAdminUserIds: [],
+  createdAt: new Date(0).toISOString(),
+  createdBy: 'seed-0.8.0',
+  updatedAt: new Date(0).toISOString(),
+  updatedBy: 'seed-0.8.0',
+};
+
+export const REFERENCE_TEAMS: OperationalTeam[] = [INITIAL_INTAKE_TEAM];
+

@@ -32,7 +32,9 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
-[tabindex]:focus-visible {
+[tabindex]:focus-visible,
+label:has(input[type="file"]:focus-visible),
+.file-upload-trigger:has(input[type="file"]:focus-visible) {
   outline: 3px solid #166534;
   outline-offset: 2px;
 }

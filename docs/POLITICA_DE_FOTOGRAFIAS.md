@@ -1,29 +1,31 @@
-# Política de fotografias — versão 0.6.0
+# Política de fotografias — versão 0.7.0
 
 ## Finalidade e minimização
 
-As fotografias servem exclusivamente como evidência operacional de problemas e soluções de infraestrutura. O canal público mantém **registro sem identificação pessoal obrigatória**.
+Fotografias servem apenas como evidência operacional de problema ou solução de infraestrutura. O registro público não exige identificação pessoal. Oriente o comunicante a evitar rostos, documentos, placas, telas e outros dados pessoais. A reencodificação remove EXIF/XMP, mas não apaga informação visível nos pixels.
 
-Orientação ao comunicante: evitar fotografar rostos, documentos, placas de veículos, telas ou outras informações pessoais. Antes do armazenamento, as imagens passam pelo processamento já existente, com reencodificação e remoção de metadados EXIF. Isso não elimina dados pessoais que estejam visíveis nos próprios pixels.
+## Quantidade e visibilidade
 
-## Quantidade, tipo e visibilidade
+- até 3 fotografias `INITIAL`, internas por padrão;
+- até 3 fotografias `RESOLUTION`, internas por padrão;
+- Administrador e Gestor podem visualizar e operar fotos conforme o domínio;
+- somente foto de solução pode ser tornada pública pela ação administrativa permitida;
+- consulta pública ainda exige App Check, autenticação anônima, protocolo e chave;
+- nenhum path físico ou credencial é exposto no DTO público.
 
-- Registro inicial: até 3 fotografias `INITIAL`, internas por padrão.
-- Solução: até 3 fotografias `RESOLUTION`, internas por padrão.
-- Administrador e Gestor podem adicionar e visualizar fotografias no exercício da gestão da ocorrência.
-- A alteração de visibilidade permanece sujeita às regras operacionais do backend e ao tipo de fotografia.
-- Nenhuma fotografia é acessada diretamente pelo cliente no Cloud Storage.
+## Armazenamento
 
-## Consulta pública
+Produção usa Cloudflare R2 privado, somente pela API. Firestore mantém os metadados e é a fonte de verdade lógica. O navegador não recebe URL pública/signed URL permanente e não usa SDK R2.
 
-Uma fotografia de solução explicitamente pública continua protegida pelo fluxo de acompanhamento: App Check quando obrigatório, autenticação anônima, protocolo e chave de acompanhamento. O DTO público contém somente metadados mínimos; o caminho físico do Storage não é exposto.
+Firebase Storage não é armazenamento produtivo na 0.7.0. Ele permanece no Emulator Suite e pode atuar como fallback temporário de leitura durante migração explicitamente habilitada. A propriedade pública Firebase `storageBucket`, quando presente, é compatibilidade de Auth/App Check/AI Studio/emulador.
 
-## Exclusão operacional e expurgo TEST
+## Processamento e falhas
 
-A exclusão normal de fotografia segue o mecanismo de tombstone/cleanup já existente, com auditoria e tratamento de objeto órfão quando necessário.
+O servidor valida assinatura, tipo e limites; decodifica e reencoda para WebP, produz thumbnail, calcula metadados e grava no R2 antes de marcar metadata `READY`. Falha de provider não cria metadata pronta sem bytes válidos. Upload parcial é compensado; falha da exclusão cria tarefa persistente de cleanup.
 
-A exclusão definitiva de uma ocorrência classificada como `TEST`, exclusiva do Administrador, também remove suas fotografias do Storage e metadados associados. Ocorrência `REAL` não possui ação comum de exclusão física.
+## Exclusão e retenção
 
-## Retenção
+Exclusão de foto usa tombstone/cleanup e auditoria. Expurgo definitivo da ocorrência é exclusivo do Administrador e somente para `TEST`. Não há expurgo comum de ocorrência `REAL`.
 
-**Prazo de retenção institucional permanece pendente de decisão específica.** A versão 0.6.0 não cria eliminação automática de fotografias de ocorrências reais resolvidas.
+O sistema não cria política arbitrária de retenção de fotos reais, nem remove fotos por limite de capacidade. Um prazo institucional futuro exige decisão formal, base legal e implementação separada. Reconciliação apply remove apenas objeto verdadeiramente órfão, após inventário completo e janela de segurança.
+

@@ -7,7 +7,7 @@ export const DEFAULT_FIRESTORE_DATABASE_ID = '(default)' as const;
 export interface FirebaseAppletRuntimeConfig {
   projectId: string;
   firestoreDatabaseId: string;
-  storageBucket: string;
+  storageBucket?: string;
 }
 
 export interface FirebaseRuntimeResolutionInput {
@@ -16,15 +16,16 @@ export interface FirebaseRuntimeResolutionInput {
   firestoreDatabaseId?: string;
   firebaseStorageBucket?: string;
   emulatorMode: boolean;
+  requireStorageBucket?: boolean;
   appletConfig?: FirebaseAppletRuntimeConfig;
 }
 
 export interface FirebaseRuntimeResolution {
   projectId: string;
   firestoreDatabaseId: string;
-  storageBucket: string;
+  storageBucket?: string;
   source: 'environment' | 'firebase-applet-config' | 'google-cloud' | 'emulator-default';
-  storageBucketSource: 'environment' | 'firebase-applet-config' | 'emulator-default';
+  storageBucketSource?: 'environment' | 'firebase-applet-config' | 'emulator-default';
 }
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -69,14 +70,14 @@ export function parseFirebaseAppletRuntimeConfig(value: unknown): FirebaseApplet
   const record = value as Record<string, unknown>;
   const projectId = typeof record.projectId === 'string' ? record.projectId.trim() : '';
   const firestoreDatabaseId = typeof record.firestoreDatabaseId === 'string' ? record.firestoreDatabaseId.trim() : '';
-  const storageBucket = typeof record.storageBucket === 'string' ? record.storageBucket.trim() : '';
-  if (projectId === '' || firestoreDatabaseId === '' || storageBucket === '') {
-    throw new Error('firebase-applet-config.json deve informar projectId, firestoreDatabaseId e storageBucket.');
+  const storageBucket = typeof record.storageBucket === 'string' ? record.storageBucket.trim() : undefined;
+  if (projectId === '' || firestoreDatabaseId === '') {
+    throw new Error('firebase-applet-config.json deve informar projectId e firestoreDatabaseId.');
   }
   return {
     projectId,
     firestoreDatabaseId: validateDatabaseId(firestoreDatabaseId),
-    storageBucket: validateStorageBucket(storageBucket),
+    ...(storageBucket === undefined || storageBucket === '' ? {} : { storageBucket: validateStorageBucket(storageBucket) }),
   };
 }
 
@@ -133,7 +134,7 @@ export function resolveFirebaseRuntime(input: FirebaseRuntimeResolutionInput): F
         ? input.appletConfig.firestoreDatabaseId
         : DEFAULT_FIRESTORE_DATABASE_ID;
 
-  let storageBucket: string;
+  let storageBucket: string | undefined;
   let storageBucketSource: FirebaseRuntimeResolution['storageBucketSource'];
   if (explicitStorageBucket !== undefined) {
     storageBucket = validateStorageBucket(explicitStorageBucket);
@@ -141,13 +142,19 @@ export function resolveFirebaseRuntime(input: FirebaseRuntimeResolutionInput): F
   } else if (input.emulatorMode) {
     storageBucket = validateStorageBucket(`${projectId}.appspot.com`);
     storageBucketSource = 'emulator-default';
-  } else if (input.appletConfig?.projectId === projectId) {
+  } else if (input.requireStorageBucket !== false && input.appletConfig?.projectId === projectId && input.appletConfig.storageBucket !== undefined) {
     storageBucket = input.appletConfig.storageBucket;
     storageBucketSource = 'firebase-applet-config';
-  } else {
+  } else if (input.requireStorageBucket === true) {
     throw new Error('FIREBASE_STORAGE_BUCKET é obrigatório quando o projeto ativo não corresponde ao firebase-applet-config.json.');
   }
 
-  assertDefaultBucketProjectCoherence(projectId, storageBucket);
-  return { projectId, firestoreDatabaseId, storageBucket, source, storageBucketSource };
+  if (storageBucket !== undefined) assertDefaultBucketProjectCoherence(projectId, storageBucket);
+  return {
+    projectId,
+    firestoreDatabaseId,
+    ...(storageBucket === undefined ? {} : { storageBucket }),
+    source,
+    ...(storageBucketSource === undefined ? {} : { storageBucketSource }),
+  };
 }

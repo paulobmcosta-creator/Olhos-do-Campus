@@ -246,17 +246,17 @@ export function NewOccurrencePage(): React.JSX.Element {
             <StatusAlert tone="warning">Evite fotografar rostos, documentos, placas de veículos, telas ou outras informações pessoais. A remoção de metadados não remove dados pessoais que estejam visíveis na própria imagem.</StatusAlert>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className={`flex cursor-pointer flex-col items-center justify-center border border-dashed border-slate-400 p-6 text-center hover:bg-slate-50 ${photos.length >= 3 || processingPhotos ? 'pointer-events-none opacity-60' : ''}`}>
+              <label className={`flex cursor-pointer flex-col items-center justify-center border border-dashed border-slate-400 p-6 text-center hover:bg-slate-50 has-[:focus-visible]:outline has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-[#166534] has-[:focus-visible]:outline-offset-2 file-upload-trigger ${photos.length >= 3 || processingPhotos ? 'pointer-events-none opacity-60' : ''}`}>
                 <Camera className="h-7 w-7 text-slate-600" aria-hidden="true" />
                 <span className="mt-2 font-semibold">Tirar fotografia</span>
                 <span className="mt-1 text-xs text-slate-600">Usar a câmera traseira quando disponível.</span>
-                <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={photos.length >= 3 || processingPhotos} onChange={(event) => void handlePhoto(event)} />
+                <input aria-label="Tirar fotografia da ocorrência" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={photos.length >= 3 || processingPhotos} onChange={(event) => void handlePhoto(event)} />
               </label>
-              <label className={`flex cursor-pointer flex-col items-center justify-center border border-dashed border-slate-400 p-6 text-center hover:bg-slate-50 ${photos.length >= 3 || processingPhotos ? 'pointer-events-none opacity-60' : ''}`}>
+              <label className={`flex cursor-pointer flex-col items-center justify-center border border-dashed border-slate-400 p-6 text-center hover:bg-slate-50 has-[:focus-visible]:outline has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-[#166534] has-[:focus-visible]:outline-offset-2 file-upload-trigger ${photos.length >= 3 || processingPhotos ? 'pointer-events-none opacity-60' : ''}`}>
                 <Images className="h-7 w-7 text-slate-600" aria-hidden="true" />
                 <span className="mt-2 font-semibold">Selecionar da galeria</span>
                 <span className="mt-1 text-xs text-slate-600">JPEG, PNG ou WebP; máximo de 8 MB por arquivo.</span>
-                <input className="sr-only" type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={photos.length >= 3 || processingPhotos} onChange={(event) => void handlePhoto(event)} />
+                <input aria-label="Selecionar fotografia da galeria para a ocorrência" className="sr-only" type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={photos.length >= 3 || processingPhotos} onChange={(event) => void handlePhoto(event)} />
               </label>
             </div>
             <p className="text-sm font-medium text-slate-700" role="status">{processingPhotos ? 'Processando fotografias...' : `${photos.length}/3 fotografias selecionadas`}</p>
@@ -278,23 +278,159 @@ export function NewOccurrencePage(): React.JSX.Element {
 
         {step === 2 && (
           <div className="space-y-5">
-            <h2 className="text-xl font-bold">Local da ocorrência</h2>
+            <div>
+              <h2 className="text-xl font-bold">Local da ocorrência</h2>
+              <p className="mt-1 text-sm text-slate-600"><span className="text-red-700 font-bold" aria-hidden="true">*</span> Indica campo de preenchimento obrigatório.</p>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div><label htmlFor="campus" className="form-label">Campus ou unidade</label><select id="campus" className="form-control" value={draft.location.campusId} onChange={(event) => selectCampus(event.target.value)} aria-invalid={fieldError(errors, 'location.campusId') !== undefined}><option value="">Selecione</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.campusName}{location.provisional === true ? ' — provisório' : ''}</option>)}</select>{fieldError(errors, 'location.campusId') !== undefined && <p className="form-error">{fieldError(errors, 'location.campusId')}</p>}</div>
-              <div><label htmlFor="building" className="form-label">Prédio, bloco ou área</label><select id="building" className="form-control" value={draft.location.buildingId} disabled={selectedCampus === undefined} onChange={(event) => selectBuilding(event.target.value)}><option value="">Selecione</option>{selectedCampus?.buildings.map((building) => <option key={building.id} value={building.id}>{building.name}</option>)}</select>{fieldError(errors, 'location.buildingId') !== undefined && <p className="form-error">{fieldError(errors, 'location.buildingId')}</p>}</div>
-              {selectedBuilding !== undefined && (selectedBuilding.floors.length > 1 || selectedBuilding.floors[0]?.name.trim()) && <div><label htmlFor="floor" className="form-label">Pavimento ou referência</label><select id="floor" className="form-control" value={draft.location.floorId} onChange={(event) => selectFloor(event.target.value)}><option value="">Selecione</option>{selectedBuilding.floors.map((floor) => <option key={floor.id} value={floor.id}>{floor.name}</option>)}</select>{fieldError(errors, 'location.floorId') !== undefined && <p className="form-error">{fieldError(errors, 'location.floorId')}</p>}</div>}
-              <div><label htmlFor="room" className="form-label">Sala, ambiente ou local</label><select id="room" className="form-control" value={draft.location.roomId} disabled={selectedFloor === undefined} onChange={(event) => updateLocation('roomId', event.target.value)}><option value="">Selecione</option>{selectedFloor?.rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}</select>{fieldError(errors, 'location.roomId') !== undefined && <p className="form-error">{fieldError(errors, 'location.roomId')}</p>}</div>
+              <div>
+                <label htmlFor="campus" className="form-label">
+                  Campus ou unidade <span className="text-red-700 font-bold" aria-hidden="true">*</span><span className="sr-only"> (obrigatório)</span>
+                </label>
+                <select
+                  id="campus"
+                  className="form-control"
+                  required
+                  aria-required="true"
+                  value={draft.location.campusId}
+                  onChange={(event) => selectCampus(event.target.value)}
+                  aria-invalid={fieldError(errors, 'location.campusId') !== undefined ? 'true' : undefined}
+                  aria-describedby={fieldError(errors, 'location.campusId') ? 'campus-error' : undefined}
+                >
+                  <option value="">Selecione</option>
+                  {locations.map((location) => <option key={location.id} value={location.id}>{location.campusName}{location.provisional === true ? ' — provisório' : ''}</option>)}
+                </select>
+                {fieldError(errors, 'location.campusId') !== undefined && <p id="campus-error" className="form-error">{fieldError(errors, 'location.campusId')}</p>}
+              </div>
+              <div>
+                <label htmlFor="building" className="form-label">
+                  Prédio, bloco ou área <span className="text-red-700 font-bold" aria-hidden="true">*</span><span className="sr-only"> (obrigatório)</span>
+                </label>
+                <select
+                  id="building"
+                  className="form-control"
+                  required
+                  aria-required="true"
+                  value={draft.location.buildingId}
+                  disabled={selectedCampus === undefined}
+                  onChange={(event) => selectBuilding(event.target.value)}
+                  aria-invalid={fieldError(errors, 'location.buildingId') !== undefined ? 'true' : undefined}
+                  aria-describedby={fieldError(errors, 'location.buildingId') ? 'building-error' : undefined}
+                >
+                  <option value="">Selecione</option>
+                  {selectedCampus?.buildings.filter((b) => b.active !== false).map((building) => <option key={building.id} value={building.id}>{building.name}</option>)}
+                </select>
+                {fieldError(errors, 'location.buildingId') !== undefined && <p id="building-error" className="form-error">{fieldError(errors, 'location.buildingId')}</p>}
+              </div>
+              {selectedBuilding !== undefined && (selectedBuilding.floors.length > 1 || selectedBuilding.floors[0]?.name.trim()) && (
+                <div>
+                  <label htmlFor="floor" className="form-label">
+                    Pavimento ou referência <span className="font-normal text-slate-500">(quando aplicável)</span>
+                  </label>
+                  <select
+                    id="floor"
+                    className="form-control"
+                    value={draft.location.floorId}
+                    onChange={(event) => selectFloor(event.target.value)}
+                    aria-invalid={fieldError(errors, 'location.floorId') !== undefined ? 'true' : undefined}
+                    aria-describedby={fieldError(errors, 'location.floorId') ? 'floor-error' : undefined}
+                  >
+                    <option value="">Selecione</option>
+                    {selectedBuilding.floors.map((floor) => <option key={floor.id} value={floor.id}>{floor.name}</option>)}
+                  </select>
+                  {fieldError(errors, 'location.floorId') !== undefined && <p id="floor-error" className="form-error">{fieldError(errors, 'location.floorId')}</p>}
+                </div>
+              )}
+              <div>
+                <label htmlFor="room" className="form-label">
+                  Sala, ambiente ou local <span className="text-red-700 font-bold" aria-hidden="true">*</span><span className="sr-only"> (obrigatório)</span>
+                </label>
+                <select
+                  id="room"
+                  className="form-control"
+                  required
+                  aria-required="true"
+                  value={draft.location.roomId}
+                  disabled={selectedFloor === undefined}
+                  onChange={(event) => updateLocation('roomId', event.target.value)}
+                  aria-invalid={fieldError(errors, 'location.roomId') !== undefined ? 'true' : undefined}
+                  aria-describedby={fieldError(errors, 'location.roomId') ? 'room-error' : undefined}
+                >
+                  <option value="">Selecione</option>
+                  {selectedFloor?.rooms.filter((r) => r.active !== false).map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+                </select>
+                {fieldError(errors, 'location.roomId') !== undefined && <p id="room-error" className="form-error">{fieldError(errors, 'location.roomId')}</p>}
+              </div>
               <div className="sm:col-span-2"><label htmlFor="complement" className="form-label">Complemento <span className="font-normal text-slate-500">(opcional)</span></label><input id="complement" className="form-control" maxLength={300} value={draft.location.complement ?? ''} onChange={(event) => updateLocation('complement', event.target.value)} /></div>
             </div>
           </div>
         )}
 
         {step === 3 && (
-          <div className="space-y-5"><h2 className="text-xl font-bold">Categoria do problema</h2><div className="grid gap-3 sm:grid-cols-2">{categories.map((category) => <label key={category.id} className={`cursor-pointer border p-4 ${draft.categoryId === category.id ? 'border-green-800 bg-green-50' : 'border-slate-300 hover:bg-slate-50'}`}><span className="flex gap-3"><input type="radio" name="category" value={category.id} checked={draft.categoryId === category.id} onChange={() => setDraft((current) => ({ ...current, categoryId: category.id }))} /><span><strong className="block">{category.name}</strong><span className="mt-1 block text-xs leading-5 text-slate-600">{category.description}</span></span></span></label>)}</div>{fieldError(errors, 'categoryId') !== undefined && <p className="form-error">{fieldError(errors, 'categoryId')}</p>}</div>
+          <fieldset
+            aria-required="true"
+            aria-describedby={fieldError(errors, 'categoryId') ? 'category-error' : undefined}
+            className="space-y-5"
+          >
+            <legend className="text-xl font-bold text-slate-950">
+              Categoria do problema <span className="text-red-700 font-bold" aria-hidden="true">*</span><span className="sr-only"> (obrigatório)</span>
+            </legend>
+            <p className="mt-1 text-sm text-slate-600"><span className="text-red-700 font-bold" aria-hidden="true">*</span> Seleção obrigatória. Escolha a categoria correspondente ao problema observado.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {categories.map((category) => (
+                <label key={category.id} className={`cursor-pointer border p-4 ${draft.categoryId === category.id ? 'border-green-800 bg-green-50' : 'border-slate-300 hover:bg-slate-50'}`}>
+                  <span className="flex gap-3">
+                    <input
+                      type="radio"
+                      name="category"
+                      value={category.id}
+                      checked={draft.categoryId === category.id}
+                      onChange={() => setDraft((current) => ({ ...current, categoryId: category.id }))}
+                    />
+                    <span>
+                      <strong className="block">{category.name}</strong>
+                      <span className="mt-1 block text-xs leading-5 text-slate-600">{category.description}</span>
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {fieldError(errors, 'categoryId') !== undefined && <p id="category-error" className="form-error">{fieldError(errors, 'categoryId')}</p>}
+          </fieldset>
         )}
 
         {step === 4 && (
-          <div className="space-y-5"><h2 className="text-xl font-bold">Descrição da situação</h2><div><label htmlFor="description" className="form-label">O que está acontecendo?</label><textarea id="description" className="form-control min-h-40" maxLength={2000} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /><p className="mt-1 text-xs text-slate-500">{draft.description.length}/2000 caracteres</p>{fieldError(errors, 'description') !== undefined && <p className="form-error">{fieldError(errors, 'description')}</p>}</div><label className="flex items-start gap-3 border border-amber-300 bg-amber-50 p-4"><input type="checkbox" className="mt-1" checked={draft.immediateRisk} onChange={(event) => setDraft((current) => ({ ...current, immediateRisk: event.target.checked }))} /><span><strong className="flex items-center gap-2"><ShieldAlert className="h-4 w-4" aria-hidden="true" />Há risco imediato?</strong><span className="mt-1 block text-xs leading-5 text-slate-700">Marque quando houver risco atual para pessoas, patrimônio ou continuidade do serviço.</span></span></label></div>
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-xl font-bold">Descrição da situação</h2>
+              <p className="mt-1 text-sm text-slate-600"><span className="text-red-700 font-bold" aria-hidden="true">*</span> Indica campo de preenchimento obrigatório.</p>
+            </div>
+            <div>
+              <label htmlFor="description" className="form-label">
+                O que está acontecendo? <span className="text-red-700 font-bold" aria-hidden="true">*</span><span className="sr-only"> (obrigatório)</span>
+              </label>
+              <textarea
+                id="description"
+                className="form-control min-h-40"
+                required
+                aria-required="true"
+                maxLength={2000}
+                value={draft.description}
+                onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
+                aria-invalid={fieldError(errors, 'description') !== undefined ? 'true' : undefined}
+                aria-describedby={fieldError(errors, 'description') ? 'description-error' : undefined}
+              />
+              <p className="mt-1 text-xs text-slate-500">{draft.description.length}/2000 caracteres</p>
+              {fieldError(errors, 'description') !== undefined && <p id="description-error" className="form-error">{fieldError(errors, 'description')}</p>}
+            </div>
+            <label className="flex items-start gap-3 border border-amber-300 bg-amber-50 p-4">
+              <input type="checkbox" className="mt-1" checked={draft.immediateRisk} onChange={(event) => setDraft((current) => ({ ...current, immediateRisk: event.target.checked }))} />
+              <span>
+                <strong className="flex items-center gap-2"><ShieldAlert className="h-4 w-4" aria-hidden="true" />Há risco imediato?</strong>
+                <span className="mt-1 block text-xs leading-5 text-slate-700">Marque quando houver risco atual para pessoas, patrimônio ou continuidade do serviço.</span>
+              </span>
+            </label>
+          </div>
         )}
 
         {step === 5 && (

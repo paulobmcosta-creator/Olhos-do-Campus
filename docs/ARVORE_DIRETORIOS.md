@@ -1,321 +1,47 @@
-# Árvore integral de diretórios — 0.6.2
+# Árvore de diretórios — versão 0.7.0
 
 ```text
-.env.example
-.firebaserc
-.gitignore
-CHANGELOG.md
-README.md
-docs/
-  APP_CHECK.md
-  ARQUITETURA.md
-  ARQUIVOS_0.3.0.md
-  ARQUIVOS_0.4.0.md
-  ARQUIVOS_0.4.1.md
-  ARQUIVOS_0.5.0.md
-  ARQUIVOS_0.5.1.md
-  ARQUIVOS_0.6.0.md
-  ARQUIVOS_0.6.1.md
-  ARQUIVOS_0.6.2.md
-  ARVORE_DIRETORIOS.md
-  ATIVOS_INSTITUCIONAIS.md
-  AUDITORIA_OPERACIONAL_0.6.0.md
-  AUTENTICACAO_E_AUTORIZACAO.md
-  CALENDARIO_DE_ATENDIMENTO.md
-  CATEGORIAS_E_RECLASSIFICACAO.md
-  CLOUD_STORAGE_0.5.0.md
-  DADOS_DE_REFERENCIA.md
-  EMULADORES_FIREBASE.md
-  EQUIPES_RESPONSAVEIS.md
-  EXPORTACOES_0.6.0.md
-  FIREBASE_CONFIGURACAO.md
-  FLUXO_DE_SITUACOES.md
-  HISTORICO_DE_OCORRENCIAS.md
-  IDENTIDADE_INSTITUCIONAL.md
-  INDICADORES_0.6.0.md
-  INSPECAO_ZIP_FINAL_0.3.0.md
-  INSPECAO_ZIP_FINAL_0.4.0.md
-  INSPECAO_ZIP_FINAL_0.4.1.md
-  INSPECAO_ZIP_FINAL_0.5.0.md
-  INSPECAO_ZIP_FINAL_0.5.1.md
-  INSPECAO_ZIP_FINAL_0.6.0.md
-  INSPECAO_ZIP_FINAL_0.6.1.md
-  INSPECAO_ZIP_FINAL_0.6.2.md
-  INTEGRACAO_FIREBASE_AI_STUDIO_0.4.1.md
-  INTEGRACAO_FIREBASE_AI_STUDIO_0.5.0.md
-  LOCAIS_E_CORRECAO_DE_LOCAL.md
-  MATRIZ_DE_PERMISSOES.md
-  MATRIZ_DE_PERMISSOES_0.6.0.md
-  METADADOS_DE_FOTOGRAFIAS.md
-  MIGRACAO_0.5.1_PARA_0.6.0.md
-  MIGRACAO_0.5.2_PARA_0.6.0.md
-  MIGRACAO_MEMORIA_PARA_FIRESTORE.md
-  MODELO_DE_DADOS_FIRESTORE_0.4.0.md
-  MODO_DEMONSTRATIVO.md
-  PAINEL_ADMINISTRATIVO_0.6.0.md
-  POLITICA_DE_FOTOGRAFIAS.md
-  PRIMEIRO_ADMINISTRADOR.md
-  PROCESSAMENTO_DE_IMAGENS.md
-  PROTOCOLO_E_CHAVE_DE_ACOMPANHAMENTO.md
-  PUBLICACAO_AI_STUDIO_0.6.1.md
-  REGRAS_DE_SEGURANCA_0.3.0.md
-  REGRAS_DE_SEGURANCA_0.4.0.md
-  REGRAS_DE_SEGURANCA_0.4.1.md
-  REGRAS_DE_SEGURANCA_0.5.0.md
-  RELATORIO_IMPLEMENTACAO_0.2.0.md
-  RELATORIO_IMPLEMENTACAO_0.3.0.md
-  RELATORIO_IMPLEMENTACAO_0.4.0.md
-  RELATORIO_IMPLEMENTACAO_0.4.1.md
-  RELATORIO_IMPLEMENTACAO_0.5.0.md
-  RELATORIO_IMPLEMENTACAO_0.5.1.md
-  RELATORIO_IMPLEMENTACAO_0.6.0.md
-  RELATORIO_IMPLEMENTACAO_0.6.1.md
-  RELATORIO_IMPLEMENTACAO_0.6.2.md
-  SEGURANCA_DEPENDENCIAS_0.5.1.md
-  SEGURANCA_DO_STORAGE_0.5.0.md
-  SLA_0.6.0.md
-  TESTES_0.2.0.md
-  TESTES_0.3.0.md
-  TESTES_0.4.0.md
-  TESTES_0.4.1.md
-  TESTES_0.5.0.md
-  TESTES_0.5.1.md
-  TESTES_0.6.0.md
-  TESTES_0.6.1.md
-  TESTES_0.6.2.md
-  TRATAMENTO_DE_ARQUIVOS_ORFAOS.md
-eslint.config.js
-firebase-applet-config.json
-firebase-blueprint.json
-firebase.ai-studio.json
-firebase.json
-firestore.indexes.json
-firestore.rules
-index.html
-metadata.json
-package-lock.json
-package.json
-public/
-  brand/
-    ifes-bsf-horizontal.jpg
-    ifes-bsf-vertical.jpg
-    originals/
-      bsf-horizontal-cor.jpg
-      bsf-vertical-cor.jpg
-scripts/
-  bootstrapAdmin.ts
-  migrate060.ts
-  prepareProductionPackage.mjs
-  seedCampusSpaces.ts
-  seedDemoData.ts
-  seedReferenceData.ts
-  storageCleanup.ts
-server/
-  app.ts
-  config/
-    env.ts
-    firebaseAdmin.ts
-    firebaseRuntime.ts
-    port.ts
-  controllers/
-    adminUserController.ts
-    authController.ts
-    configController.ts
-    occurrenceController.ts
-    operationalAdminController.ts
-  domain/
-    businessTime.ts
-    occurrenceStateMachine.ts
-    sla.ts
-  index.ts
-  middleware/
-    asyncHandler.ts
-    correlationId.ts
-    errorHandler.ts
-    multipartPhotos.ts
-    requireAnonymousUser.ts
-    requireAppCheck.ts
-    requireAuthorizedAdmin.ts
-    requireFirebaseUser.ts
-    requireRole.ts
-    validate.ts
-  models/
-    occurrenceDomain.ts
-    photoDomain.ts
-  repositories/
-    adminUserRepository.ts
-    auditLogRepository.ts
-    categoryRepository.ts
-    cloudStoragePhotoRepository.ts
-    locationRepository.ts
-    occurrenceEventRepository.ts
-    occurrenceRepository.ts
-    operationalTeamRepository.ts
-    photoMetadataRepository.ts
-    photoRepository.ts
-    protocolCounterRepository.ts
-    referenceSeedData.ts
-    slaConfigRepository.ts
-    storageCleanupTaskRepository.ts
-    systemConfigRepository.ts
-  routes/
-    apiRoutes.ts
-  serializers/
-    occurrenceDto.ts
-  services/
-    adminAuthorizationService.ts
-    adminUserService.ts
-    appCheckTokenService.ts
-    configService.ts
-    firebaseTokenService.ts
-    imageProcessingService.ts
-    occurrenceService.ts
-    operationalAdminService.ts
-    photoService.ts
-  types/
-    errors.ts
-    express.d.ts
-    firebase.ts
-  utils/
-    email.ts
-    ids.ts
-    reportExport.ts
-    trackingKey.ts
-  validators/
-    schemas.ts
-src/
-  App.tsx
-  auth/
-    adminAuth.ts
-    publicAuth.ts
-  components/
-    admin/
-      AdminUserManagement.tsx
-      AuditLogPanel.tsx
-    common/
-      BrandImage.tsx
-      DemoModeBanner.tsx
-      Footer.tsx
-      Header.tsx
-      LoadingState.tsx
-      OccurrenceBadges.tsx
-      StatusAlert.tsx
-    photos/
-      AdminPhotoGallery.tsx
-      PublicSolutionPhotoGallery.tsx
-    public/
-      StepIndicator.tsx
-  config/
-    branding.ts
-    env.ts
-    firebase.ts
-    firebaseEnvironment.ts
-    routes.ts
-    version.ts
-  context/
-    AdminAuthContext.tsx
-    AppDataContext.tsx
-    PublicAuthContext.tsx
-  hooks/
-    useDocumentTitle.ts
-  index.css
-  layouts/
-    AdminLayout.tsx
-    RootLayout.tsx
-  main.tsx
-  models/
-    admin.ts
-    config.ts
-    http.ts
-    occurrence.ts
-    operations.ts
-  pages/
-    HomePage.tsx
-    NewOccurrencePage.tsx
-    NotFoundPage.tsx
-    TrackingPage.tsx
-    admin/
-      AdminAnalyticsPage.tsx
-      AdminAuditPage.tsx
-      AdminDashboardPage.tsx
-      AdminLoginPage.tsx
-      AdminOccurrenceDetailPage.tsx
-      AdminOccurrencesPage.tsx
-      AdminSettingsPage.tsx
-      AdminTeamsPage.tsx
-      AdminUsersPage.tsx
-  routes/
-    AppRouter.tsx
-    AuthorizedAdminRoute.tsx
-  services/
-    adminService.ts
-    apiClient.ts
-    configService.ts
-    firebase/
-      appCheckTokenService.ts
-    occurrenceService.ts
-    operationsService.ts
-  utils/
-    date.ts
-    errors.ts
-    image.ts
-    polling.ts
-    protocol.ts
-  validators/
-    occurrence.ts
-    responses.ts
-    tracking.ts
-  vite-env.d.ts
-storage.rules
-tests/
-  adminAuthorization.test.ts
-  adminRoles060.test.ts
-  adminUserRepository.test.ts
-  analytics060.test.ts
-  apiClient.test.ts
-  authenticationAuthorizationApi.test.ts
-  bootstrapContractVersion062.test.ts
-  brandImage.test.tsx
-  firebaseInstances.test.ts
-  firebaseIntegration.test.ts
-  firebaseRules.test.ts
-  firebaseRuntime.test.ts
-  firestoreSerialization.test.ts
-  fixtures/
-    photo-with-exif-gps-xmp.jpg
-    photo-with-exif-gps.jpg
-  helpers/
-    fakePhotoInfrastructure.ts
-    fakeRepositories.ts
-    occurrenceServiceFixture.ts
-    serverTestHarness.ts
-  imageClient.test.ts
-  imageProcessingService.test.ts
-  internalNoteAudience060.test.ts
-  occurrenceDomainRules.test.ts
-  occurrencePermissions.test.ts
-  occurrenceService.test.ts
-  occurrenceStateMachine.test.ts
-  operationalAdministration060.test.ts
-  pagination060.test.ts
-  photoApi.test.ts
-  photoGallery.test.tsx
-  photoService.test.ts
-  polling060.test.ts
-  productionPackaging061.test.ts
-  protocol.test.ts
-  publicOccurrence.test.ts
-  referenceData.test.ts
-  reportExport060.test.ts
-  routingAndBranding.test.tsx
-  serverEnvironment.test.ts
-  setup.ts
-  sla060.test.ts
-  staticPolicy.test.ts
-  storageIntegration.test.ts
-  trackingKey.test.ts
-  validation.test.ts
-tsconfig.json
-vite.config.ts
-vitest.config.ts
+.
+├── src/                         frontend React/Vite
+│   ├── pages/admin/             inclui Infraestrutura e capacidade
+│   ├── services/                cliente HTTP
+│   └── models/                  contratos de transporte
+├── server/                      API Express/Cloud Run
+│   ├── config/                  Firebase e ambiente
+│   ├── controllers/             HTTP
+│   ├── domain/                  regras de negócio
+│   ├── middleware/              Auth, App Check, HMAC, erros
+│   ├── models/                  domínio persistido
+│   ├── providers/               Resend
+│   ├── repositories/            Firestore, R2 e fallback Storage
+│   ├── routes/                  API pública/admin/interna
+│   └── services/                casos de uso
+├── infra/
+│   ├── cloudflare/maintenance-worker/
+│   │   ├── src/index.ts
+│   │   ├── package.json
+│   │   ├── tsconfig.json
+│   │   └── wrangler.jsonc
+│   └── artifact-registry-cleanup-policy.json
+├── scripts/
+│   ├── migrateStorageToR2.ts
+│   ├── reconcilePhotoStorage.ts
+│   ├── storageCleanup.ts
+│   ├── artifactRegistryCleanup.ts
+│   ├── artifactRegistrySnapshot.ts
+│   └── scripts preservados de bootstrap/seed/migração
+├── public/
+│   ├── _redirects             fallback SPA do Pages
+│   └── _headers               headers de segurança do Pages
+├── tests/                      unitários, contratos, emuladores e opt-in externo
+├── docs/                       documentação ativa e histórico versionado
+├── Dockerfile                  imagem da API
+├── cloudbuild.yaml             build/push da API
+├── firebase*.json              integração Firebase preservada
+├── firestore.rules             deny-all para clientes
+├── storage.rules               deny-all para clientes
+├── package.json
+└── package-lock.json
 ```
+
+`dist/`, `node_modules/`, `.env` reais, `work/` e `outputs/` não fazem parte do ZIP-fonte. `dist/client` é o artefato do Pages e `dist/server` é o artefato de Cloud Run. O diretório `work/` existe apenas durante a preparação local e não pertence ao projeto entregue.

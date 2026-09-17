@@ -1,5 +1,5 @@
 import type { Storage } from 'firebase-admin/storage';
-import type { PhotoObjectInfo, PhotoObjectMetadata, PhotoRepository } from './photoRepository';
+import type { PhotoObjectInfo, PhotoObjectMetadata, PhotoObjectPage, PhotoRepository } from './photoRepository';
 
 type Bucket = ReturnType<Storage['bucket']>;
 
@@ -18,6 +18,7 @@ function numericSize(value: string | number | undefined): number | undefined {
 }
 
 export class CloudStoragePhotoRepository implements PhotoRepository {
+  public readonly provider = 'firebase-storage' as const;
   public constructor(private readonly bucket: Bucket) {}
 
   public async save(path: string, buffer: Buffer, metadata: PhotoObjectMetadata): Promise<void> {
@@ -72,6 +73,30 @@ export class CloudStoragePhotoRepository implements PhotoRepository {
       if (this.isNotFound(error)) return undefined;
       throw error;
     }
+  }
+
+  public async listPage(prefix: string, cursor?: string, limit = 500): Promise<PhotoObjectPage> {
+    const [files, , rawResponse] = await this.bucket.getFiles({
+      prefix,
+      maxResults: Math.min(Math.max(limit, 1), 1000),
+      ...(cursor === undefined ? {} : { pageToken: cursor }),
+      autoPaginate: false,
+    });
+    const items = await Promise.all(files.map(async (file) => {
+      const [metadata] = await file.getMetadata();
+      const size = numericSize(metadata.size);
+      return {
+        path: file.name,
+        ...(metadata.contentType === undefined ? {} : { contentType: metadata.contentType }),
+        ...(size === undefined ? {} : { size }),
+        ...(typeof metadata.updated === 'string' && !Number.isNaN(Date.parse(metadata.updated)) ? { lastModified: new Date(metadata.updated) } : {}),
+      };
+    }));
+    const response = rawResponse as { nextPageToken?: unknown };
+    const nextCursor = typeof response.nextPageToken === 'string' && response.nextPageToken !== ''
+      ? response.nextPageToken
+      : undefined;
+    return { items, ...(nextCursor === undefined ? {} : { nextCursor }) };
   }
 
   private isNotFound(error: unknown): boolean {

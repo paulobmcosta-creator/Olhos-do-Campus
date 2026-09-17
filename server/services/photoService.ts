@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { AuthorizedAdminProfile } from '../../src/models/admin';
 import type { IncomingPhoto, PhotoKind, ProcessedPhoto, StoredPhotoMetadata } from '../models/photoDomain';
 import type { PhotoMetadataRepository } from '../repositories/photoMetadataRepository';
-import type { PhotoRepository } from '../repositories/photoRepository';
+import { PhotoDeletionError, type PhotoRepository, type PhotoStorageProvider } from '../repositories/photoRepository';
 import type { StorageCleanupTaskRepository } from '../repositories/storageCleanupTaskRepository';
 import { HttpError } from '../types/errors';
 import type { ImageProcessingService } from './imageProcessingService';
@@ -112,17 +112,24 @@ export class PhotoService {
   public async compensate(paths: string[], reason: string, correlationId: string): Promise<void> {
     const unique = [...new Set(paths)];
     if (unique.length === 0) return;
-    const failed: string[] = [];
+    const failedByProvider = new Map<PhotoStorageProvider, string[]>();
+    const recordFailure = (provider: PhotoStorageProvider, path: string): void => {
+      failedByProvider.set(provider, [...(failedByProvider.get(provider) ?? []), path]);
+    };
     for (const path of unique) {
       try {
         await this.objects.delete(path);
-      } catch {
-        failed.push(path);
+      } catch (error: unknown) {
+        if (error instanceof PhotoDeletionError) {
+          for (const provider of error.failedProviders) recordFailure(provider, path);
+        } else {
+          recordFailure(this.objects.provider, path);
+        }
       }
     }
-    if (failed.length > 0) {
+    for (const [provider, failedPaths] of failedByProvider) {
       try {
-        await this.cleanupTasks.create(failed, reason);
+        await this.cleanupTasks.create(failedPaths, reason, provider);
       } catch (error: unknown) {
         console.error(`Falha operacional ao registrar tarefa de limpeza [${correlationId}]: ${safeStorageError(error)}`);
       }

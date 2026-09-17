@@ -70,7 +70,7 @@ export function HomePage(): React.JSX.Element {
       <section className="border-t border-slate-300 pt-6">
         <h2 className="text-xl font-bold text-slate-950">{BRANDING.officialName}</h2>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-700">
-          A versão {APP_VERSION} utiliza Firebase Authentication para as sessões públicas e administrativas, App Check, autorização institucional, Cloud Firestore para o domínio e Cloud Storage para os bytes das fotografias. O acesso às imagens permanece mediado pela API institucional; o envio de e-mail ainda não está implementado.
+          A versão {APP_VERSION} utiliza Firebase Authentication, App Check e Cloud Firestore, Cloudflare R2 privado para os bytes das fotografias e Resend para notificações transacionais habilitadas pela Administração. O acesso às imagens permanece mediado pela API institucional.
         </p>
       </section>
     </div>

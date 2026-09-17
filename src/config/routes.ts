@@ -10,5 +10,6 @@ export const ROUTES = {
   adminTeams: '/administracao/equipes',
   adminAudit: '/administracao/auditoria',
   adminSettings: '/administracao/configuracoes',
+  adminInfrastructure: '/administracao/infraestrutura',
   adminOccurrence: (id: string): string => `/administracao/ocorrencias/${encodeURIComponent(id)}`,
 } as const;

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TestHarness } from './helpers/serverTestHarness';
 import { createTestHarness, headers, multipartHeaders, occurrenceFormData, validOccurrenceBody } from './helpers/serverTestHarness';

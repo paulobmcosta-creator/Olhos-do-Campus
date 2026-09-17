@@ -13,14 +13,16 @@ function taskFromSnapshot(snapshot: QueryDocumentSnapshot<DocumentData>): Storag
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(0),
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(0),
     ...(typeof data.lastError === 'string' && data.lastError !== '' ? { lastError: data.lastError } : {}),
+    storageProvider: data.storageProvider === 'r2' ? 'r2' : 'firebase-storage',
   };
 }
 
 export interface StorageCleanupTaskRepository {
-  create(storagePaths: string[], reason: string): Promise<string>;
+  create(storagePaths: string[], reason: string, storageProvider?: 'r2' | 'firebase-storage'): Promise<string>;
   listPending(limit?: number): Promise<StorageCleanupTask[]>;
   markCompleted(taskId: string): Promise<void>;
   markFailed(taskId: string, lastError: string): Promise<void>;
+  listRecent(limit?: number): Promise<StorageCleanupTask[]>;
 }
 
 export class FirestoreStorageCleanupTaskRepository implements StorageCleanupTaskRepository {
@@ -30,7 +32,7 @@ export class FirestoreStorageCleanupTaskRepository implements StorageCleanupTask
     this.collection = firestore.collection('storageCleanupTasks');
   }
 
-  public async create(storagePaths: string[], reason: string): Promise<string> {
+  public async create(storagePaths: string[], reason: string, storageProvider: 'r2' | 'firebase-storage' = 'firebase-storage'): Promise<string> {
     const now = new Date();
     const reference = this.collection.doc();
     await reference.create({
@@ -41,6 +43,7 @@ export class FirestoreStorageCleanupTaskRepository implements StorageCleanupTask
       attempts: 0,
       createdAt: Timestamp.fromDate(now),
       updatedAt: Timestamp.fromDate(now),
+      storageProvider,
     });
     return reference.id;
   }
@@ -65,6 +68,11 @@ export class FirestoreStorageCleanupTaskRepository implements StorageCleanupTask
       updatedAt: Timestamp.fromDate(new Date()),
       lastError: lastError.slice(0, 500),
     });
+  }
+
+  public async listRecent(limit = 200): Promise<StorageCleanupTask[]> {
+    const snapshot = await this.collection.orderBy('updatedAt', 'desc').limit(Math.min(Math.max(limit, 1), 500)).get();
+    return snapshot.docs.map(taskFromSnapshot);
   }
 
 }

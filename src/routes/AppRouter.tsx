@@ -14,6 +14,7 @@ import { AdminOccurrencesPage } from '../pages/admin/AdminOccurrencesPage';
 import { AdminSettingsPage } from '../pages/admin/AdminSettingsPage';
 import { AdminTeamsPage } from '../pages/admin/AdminTeamsPage';
 import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
+import { AdminInfrastructurePage } from '../pages/admin/AdminInfrastructurePage';
 import { AuthorizedAdminRoute } from './AuthorizedAdminRoute';
 
 export function AppRoutes(): React.JSX.Element {
@@ -29,12 +30,15 @@ export function AppRoutes(): React.JSX.Element {
             <Route index element={<AdminDashboardPage />} />
             <Route path="ocorrencias" element={<AdminOccurrencesPage />} />
             <Route path="ocorrencias/:id" element={<AdminOccurrenceDetailPage />} />
-            <Route path="indicadores" element={<AdminAnalyticsPage />} />
+            <Route element={<AuthorizedAdminRoute allowedRoles={['Administrador', 'Gestor']} />}>
+              <Route path="indicadores" element={<AdminAnalyticsPage />} />
+            </Route>
             <Route element={<AuthorizedAdminRoute allowedRoles={['Administrador']} />}>
               <Route path="usuarios" element={<AdminUsersPage />} />
               <Route path="equipes" element={<AdminTeamsPage />} />
               <Route path="auditoria" element={<AdminAuditPage />} />
               <Route path="configuracoes" element={<AdminSettingsPage />} />
+              <Route path="infraestrutura" element={<AdminInfrastructurePage />} />
             </Route>
           </Route>
         </Route>

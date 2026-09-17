@@ -1,5 +1,7 @@
 # Matriz de permissões — 0.6.0
 
+> Documento histórico da matriz introduzida na 0.6.0. Para as permissões adicionais de notificações e infraestrutura da versão ativa, consulte `MATRIZ_DE_PERMISSOES.md`.
+
 | Operação | Administrador | Gestor |
 |---|:---:|:---:|
 | Visualizar todas as ocorrências | ✓ | ✓ |

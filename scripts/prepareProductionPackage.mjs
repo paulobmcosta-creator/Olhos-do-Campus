@@ -3,17 +3,21 @@ import { existsSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const projectRoot = resolve(import.meta.dirname, '..');
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npmCli = process.env.npm_execpath;
+const npmCommand = npmCli === undefined ? (process.platform === 'win32' ? 'npm.cmd' : 'npm') : process.execPath;
+const npmArguments = npmCli === undefined
+  ? ['prune', '--omit=dev', '--no-audit', '--no-fund']
+  : [npmCli, 'prune', '--omit=dev', '--no-audit', '--no-fund'];
 
 console.log('[production-package] Removendo dependências de desenvolvimento do node_modules...');
 
 const pruneResult = spawnSync(
   npmCommand,
-  ['prune', '--omit=dev', '--no-audit', '--no-fund'],
+  npmArguments,
   {
     cwd: projectRoot,
     stdio: 'inherit',
-    shell: false,
+    shell: process.platform === 'win32' && npmCli === undefined,
   },
 );
 

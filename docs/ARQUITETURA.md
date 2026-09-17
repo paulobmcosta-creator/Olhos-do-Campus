@@ -1,129 +1,67 @@
-# Arquitetura — versão 0.6.0
+# Arquitetura — versão 0.7.0
 
-## 1. Visão geral
-
-A versão 0.6.0 preserva a arquitetura server-only consolidada na série 0.5.x e amplia o domínio administrativo sem liberar acesso direto do navegador aos dados institucionais.
+## Visão geral
 
 ```text
-React + TypeScript + Vite
-        ↓ HTTPS
-Express API
-        ↓
-Firebase App Check
-        ↓
-Firebase Authentication
-        ↓
-Autorização server-side
-        ↓
-Controllers / Services / Domain
-        ↓
-Repositories
-        ↓
-Firebase Admin SDK
-        ↓
-Cloud Firestore + Cloud Storage
+Navegador
+  -> Cloudflare Pages: React/TypeScript/Vite
+  -> Firebase Authentication + App Check
+  -> HTTPS/CORS
+Cloud Run: Express API only
+  -> domínio/services/repositories
+  -> Cloud Firestore: ocorrências, histórico, metadados, outbox e snapshots
+  -> Cloudflare R2 privado: bytes das fotografias
+  -> Resend: entrega de e-mail
+
+Cloudflare Maintenance Worker
+  -> HMAC + janela temporal
+  -> processamento periódico da outbox e snapshot agregado
 ```
 
-O frontend usa Firebase Authentication para identidade e App Check para atestar o cliente. Firestore e Storage permanecem `deny-all` para o SDK Web; leitura e escrita institucionais são feitas pelo backend com Firebase Admin.
+Pages e Cloud Run possuem builds separados. Em produção, Express responde apenas `/api`; não serve `dist/client`, assets ou fallback SPA. Pages usa `_redirects` para a SPA e `_headers` para headers compatíveis. CORS exige lista de origens HTTPS exatas.
 
-## 2. Frontend
+## Identidade, dados e autorização
 
-Principais áreas:
+O registro/acompanhamento público usa Firebase Anonymous Auth; administração usa Google Sign-In, e-mail verificado, domínio permitido e allowlist `adminUsers`. App Check atesta o cliente. Toda autorização crítica é aplicada no backend.
 
-- registro público de ocorrência;
-- consulta pública por protocolo + chave de acompanhamento;
-- autenticação administrativa Google;
-- dashboard operacional;
-- listagem administrativa com filtros, paginação por cursor, ordenação e exportações;
-- detalhe operacional da ocorrência;
-- painel analítico `/administracao/indicadores`;
-- usuários, equipes/setores, configurações institucionais e auditoria global, exclusivos do Administrador.
+O cliente não acessa Firestore, Firebase Storage nem R2 diretamente. Regras Firestore/Storage são deny-all. O Firebase Admin SDK continua necessário para Auth, Firestore e testes/fallback Storage, mesmo que os bytes produtivos estejam no R2.
 
-O polling administrativo é de 60 segundos e não substitui silenciosamente o estado exibido. Ele apenas sinaliza que há informações novas e permite atualização explícita.
+Coleções principais:
 
-## 3. Backend
+- `occurrences/{id}` com `events` e `photos`;
+- `notificationOutbox` e `notificationWebhookEvents`;
+- `infrastructureCapacitySettings` e `infrastructureUsageSnapshots` (documentos `daily-*` e agregados `monthly-*`);
+- `artifactRegistrySnapshots` e `storageReconciliationReports`;
+- `storageCleanupTasks`;
+- `adminUsers`, `auditLogs`, `categories`, `locations`, `operationalTeams`, `systemSettings`, SLA/calendário e contadores.
 
-A API segue a sequência:
+Novas coleções técnicas permanecem server-only. Snapshots contêm somente agregados e não copiam ocorrências, e-mails, chaves ou IPs.
 
-```text
-route
-→ App Check
-→ Firebase Auth
-→ autorização
-→ validação Zod
-→ controller
-→ service/domínio
-→ repository
-→ Firebase
-```
+## Ocorrências e outbox
 
-Operações críticas não aceitam patch livre do documento. O DTO administrativo admite somente ações explicitamente validadas pelo domínio, com `expectedVersion` para optimistic locking.
+A criação reserva protocolo e, na mesma transação Firestore, grava ocorrência, evento inicial, metadados de fotos e itens determinísticos da outbox para dados `REAL`. Falha transacional não deixa ocorrência sem os itens previstos. Dados `TEST` não geram entrega real.
 
-## 4. Domínio de ocorrências
+Cada documento da outbox representa um destinatário. Claims transacionais com lease suportam instâncias concorrentes do Cloud Run. Retry usa backoff e estados explícitos; o documento e a `Idempotency-Key` do Resend formam duas camadas de idempotência. Webhooks assinados atualizam delivered/bounced/complained e são deduplicados.
 
-O documento materializado preserva:
+## Fotografias
 
-- categoria reportada imutável + categoria atual;
-- local reportado imutável + local atual;
-- prioridade e `priorityRank`;
-- equipe e responsável individual opcional com snapshots textuais;
-- `REAL | TEST`;
-- `closedAt`, `resolvedAt`, reaberturas e `lastReopenedAt`;
-- snapshot de SLA e de calendário;
-- campos materializados estritamente necessários a filtros (`hasTeam`, `hasResponsible`, `hasPhoto`, `isClosed`, `reopened`, `searchTokens`).
+O navegador envia multipart à API. `sharp` valida assinatura binária, limita tipo/quantidade/tamanho, reencoda JPEG/PNG/WebP para WebP, remove metadados e gera thumbnail. O R2 guarda os bytes; Firestore guarda existência lógica, path, hash, tamanho, visibilidade e estado.
 
-Histórico funcional permanece em `occurrences/{id}/events` e é append-only pela aplicação.
+Falha parcial tenta compensação idempotente. Falha da compensação registra `storageCleanupTasks`. Migração e reconciliação são paginadas, dry-run por padrão e não estabelecem retenção automática para dados `REAL`. Firebase Storage é somente origem legada/fallback temporário e backend local do emulador.
 
-## 5. SLA e calendário
+## Infraestrutura
 
-O cálculo de horas úteis está centralizado em `server/domain/businessTime.ts` e `server/domain/sla.ts`. O timezone institucional é `America/Sao_Paulo`. Cada ocorrência recebe snapshot da política aplicável para impedir reescrita retroativa por mudanças futuras de calendário/matriz.
+O painel exclusivo do Administrador combina inventário R2, contagem/estimativa Firestore, métricas da outbox, cleanup, reconciliação e último snapshot externo do Artifact Registry. Referências e limiares são configuráveis e produzem alertas, nunca bloqueio ou exclusão automática. Projeções são marcadas como estimativas.
 
-O SLA efetivo pausa em:
+O Artifact Registry é observado por script com identidade operacional própria, evitando conceder leitura do Registry ao Cloud Run. O Worker agenda somente endpoints internos assinados; a manutenção manual continua disponível.
 
-- `Aguardando material`;
-- `Aguardando contratação ou serviço externo`.
+## Segurança preservada
 
-Ao atingir estado terminal o relógio de SLA para. Se a ocorrência for reaberta, o intervalo em que permaneceu encerrada é tratado como suspensão do SLA efetivo; o tempo total cronológico continua ininterrupto.
-
-## 6. Firestore
-
-Coleções centrais:
-
-- `occurrences` + subcoleções `events` e `photos`;
-- `adminUsers`;
-- `categories`;
-- `locations`;
-- `operationalTeams`;
-- `systemSettings`;
-- `serviceCalendars`;
-- `serviceCalendarExceptions`;
-- `auditLogs`;
-- `protocolCounters`;
-- `storageCleanupTasks`.
-
-A listagem administrativa usa cursor (`startAfter`) e limite, nunca offset como mecanismo principal. Consultas com intervalo colocam o(s) campo(s) de desigualdade antes dos critérios operacionais de desempate, respeitando as restrições de ordenação do Firestore. `firestore.indexes.json` contém apenas índices compostos para ordenações/filas efetivamente implementadas; combinações não cobertas devem ser tratadas por índice adicional deliberado, nunca por scan ilimitado em memória.
-
-## 7. Fotografias
-
-O navegador envia multipart ao servidor. `sharp` valida e reencoda JPEG/PNG/WebP para WebP, remove metadados embutidos e produz miniaturas. Os bytes ficam no Cloud Storage; Firestore guarda metadados. Leitura pública/administrativa ocorre por endpoints autenticados/autorizados, sem signed URL permanente.
-
-## 8. Segurança
-
-Preservado:
-
-- Firebase Anonymous Auth no registro/acompanhamento público;
-- Google Sign-In administrativo;
-- allowlist `adminUsers`;
-- App Check;
-- Firestore/Storage server-only;
-- chave de acompanhamento fora da URL;
-- hash + salt da chave, nunca exportados;
-- optimistic locking;
-- minimização de auditoria;
-- exclusão física somente de ocorrência `TEST` por Administrador.
-
-`Atendente` não é papel ativo. O valor existe somente como marcador legado bloqueado até resolução administrativa explícita.
-
-## 9. Limites deliberados da 0.6.0
-
-Não pertencem a esta versão: e-mail real, Trigger Email, SMTP, WebSocket/SSE, ações em lote, múltiplos campi, BI externo e exclusão física de ocorrências `REAL`.
+- protocolo + chave de acompanhamento fora da URL;
+- hash + salt, sem chave em texto puro;
+- optimistic locking e eventos de domínio;
+- fotografias iniciais internas;
+- logs e e-mails minimizados;
+- exclusão física comum somente para dados `TEST` por Administrador;
+- nenhuma Cloud Function, Cloud Tasks, Pub/Sub, Billing API ou banco adicional;
+- nenhum segredo no frontend.

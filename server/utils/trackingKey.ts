@@ -54,3 +54,23 @@ export async function verifyTrackingKey(
     return false;
   }
 }
+
+const DUMMY_SALT = Buffer.from('4f6c686f73446f43616d70757353616c', 'hex');
+const DUMMY_HASH = Buffer.alloc(KEY_LENGTH, 0);
+
+/**
+ * G09B-F002: Executa verificação criptográfica dummy com custo idêntico (scrypt N=16384, r=8, p=1)
+ * quando o protocolo consultado não existe, eliminando timing oracle entre protocolo inexistente
+ * e chave incorreta.
+ */
+export async function verifyTrackingKeyDummy(trackingKey: string): Promise<boolean> {
+  const normalized = normalizeTrackingKey(trackingKey);
+  if (!isValidTrackingKeyFormat(normalized)) return false;
+  try {
+    const actual = await deriveTrackingKey(normalized, DUMMY_SALT);
+    return actual.length === DUMMY_HASH.length && timingSafeEqual(actual, DUMMY_HASH);
+  } catch {
+    return false;
+  }
+}
+

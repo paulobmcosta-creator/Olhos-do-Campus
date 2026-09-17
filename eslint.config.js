@@ -10,14 +10,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default tseslint.config(
-  { ignores: ['dist', 'coverage', 'node_modules', '*.config.js', '*.config.ts'] },
+  { ignores: ['dist', 'coverage', 'node_modules', 'work', 'outputs', 'infra/cloudflare/maintenance-worker/node_modules', '*.config.js', '*.config.ts', '**/*.mjs'] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
       parserOptions: {
-        project: ['./tsconfig.json'],
+        project: ['./tsconfig.json', './infra/cloudflare/maintenance-worker/tsconfig.json'],
         tsconfigRootDir: __dirname,
       },
       globals: {
@@ -59,6 +59,7 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/require-await': 'off',
     },
   },
   {

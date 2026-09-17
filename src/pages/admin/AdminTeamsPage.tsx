@@ -10,18 +10,58 @@ import { adminService } from '../../services/adminService';
 import { operationsService } from '../../services/operationsService';
 import { getErrorMessage } from '../../utils/errors';
 
-interface TeamDraft { name: string; description: string; sortOrder: number; active: boolean; memberAdminUserIds: string[]; }
-function fromTeam(team: OperationalTeam): TeamDraft { return { name: team.name, description: team.description ?? '', sortOrder: team.sortOrder, active: team.active, memberAdminUserIds: [...team.memberAdminUserIds] }; }
+interface TeamDraft {
+  name: string;
+  description: string;
+  sortOrder: number;
+  active: boolean;
+  memberAdminUserIds: string[];
+  notificationEmail: string;
+  isInitialIntakeTeam: boolean;
+}
+
+function fromTeam(team: OperationalTeam): TeamDraft {
+  return {
+    name: team.name,
+    description: team.description ?? '',
+    sortOrder: team.sortOrder,
+    active: team.active,
+    memberAdminUserIds: [...team.memberAdminUserIds],
+    notificationEmail: team.notificationEmail ?? '',
+    isInitialIntakeTeam: team.isInitialIntakeTeam ?? false,
+  };
+}
 
 export function AdminTeamsPage(): React.JSX.Element {
   useDocumentTitle('Equipes e setores');
   const [teams, setTeams] = useState<OperationalTeam[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [name, setName] = useState(''); const [description, setDescription] = useState(''); const [members, setMembers] = useState<string[]>([]);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [notificationEmail, setNotificationEmail] = useState('');
+  const [isInitialIntakeTeam, setIsInitialIntakeTeam] = useState(false);
+  const [members, setMembers] = useState<string[]>([]);
   const [editing, setEditing] = useState<Record<string, TeamDraft>>({});
-  const [loading, setLoading] = useState(true); const [saving, setSaving] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null); const [success, setSuccess] = useState<string | null>(null);
-  const load = useCallback(async (showLoading = false): Promise<void> => { if (showLoading) setLoading(true); try { const [teamItems, userItems] = await Promise.all([operationsService.listTeams(), adminService.listUsers()]); setTeams(teamItems.sort((a, b) => a.sortOrder - b.sortOrder)); setUsers(userItems.filter((item) => item.active && !item.legacyRole)); setEditing(Object.fromEntries(teamItems.map((item) => [item.id, fromTeam(item)]))); setError(null); } catch (caught) { setError(getErrorMessage(caught)); } finally { setLoading(false); } }, []);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const load = useCallback(async (showLoading = false): Promise<void> => {
+    if (showLoading) setLoading(true);
+    try {
+      const [teamItems, userItems] = await Promise.all([operationsService.listTeams(), adminService.listUsers()]);
+      setTeams(teamItems.sort((a, b) => a.sortOrder - b.sortOrder));
+      setUsers(userItems.filter((item) => item.active && !item.legacyRole));
+      setEditing(Object.fromEntries(teamItems.map((item) => [item.id, fromTeam(item)])));
+      setError(null);
+    } catch (caught) {
+      setError(getErrorMessage(caught));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -40,13 +80,169 @@ export function AdminTeamsPage(): React.JSX.Element {
     })();
     return () => { active = false; };
   }, []);
-  const submit = async (event: FormEvent): Promise<void> => { event.preventDefault(); try { await operationsService.createTeam({ name: name.trim(), description: description.trim() || undefined, sortOrder: (teams.at(-1)?.sortOrder ?? 0) + 10, memberAdminUserIds: members }); setName(''); setDescription(''); setMembers([]); setSuccess('Equipe/Setor criado e membros sincronizados.'); await load(); } catch (caught) { setError(getErrorMessage(caught)); } };
-  const save = async (team: OperationalTeam): Promise<void> => { const draft = editing[team.id]; if (!draft) return; setSaving(team.id); try { await operationsService.updateTeam(team.id, { name: draft.name.trim(), description: draft.description.trim() || undefined, sortOrder: draft.sortOrder, active: draft.active, memberAdminUserIds: draft.memberAdminUserIds }); setSuccess(`Equipe/Setor “${draft.name}” atualizado.`); await load(); } catch (caught) { setError(getErrorMessage(caught)); } finally { setSaving(null); } };
-  const toggleMember = (teamId: string, userId: string, checked: boolean): void => { setEditing((all) => { const draft = all[teamId]; if (!draft) return all; return { ...all, [teamId]: { ...draft, memberAdminUserIds: checked ? [...new Set([...draft.memberAdminUserIds, userId])] : draft.memberAdminUserIds.filter((id) => id !== userId) } }; }); };
-  return <div className="space-y-5">
-    <div className="flex justify-between"><div><h1 className="text-3xl font-bold">Equipes/Setores</h1><p className="mt-1 text-sm text-slate-700">Somente Administradores gerenciam a estrutura. Usuários podem integrar uma ou mais equipes; o responsável individual da ocorrência permanece opcional.</p></div><button className="btn-secondary" onClick={() => void load()}><RefreshCw className="h-4 w-4" aria-hidden="true" />Atualizar</button></div>
-    <form className="space-y-4 border border-slate-300 p-5" onSubmit={(event) => void submit(event)}><h2 className="text-lg font-bold">Nova equipe/setor</h2><div className="grid gap-3 sm:grid-cols-2"><div><label className="form-label" htmlFor="team-name">Nome</label><input id="team-name" className="form-control" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} /></div><div><label className="form-label" htmlFor="team-desc">Descrição</label><input id="team-desc" className="form-control" maxLength={300} value={description} onChange={(e) => setDescription(e.target.value)} /></div></div><fieldset><legend className="form-label">Membros iniciais</legend><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{users.map((user) => <label className="flex items-center gap-2 border p-2" key={user.id}><input type="checkbox" checked={members.includes(user.id)} onChange={(e) => setMembers((current) => e.target.checked ? [...current, user.id] : current.filter((id) => id !== user.id))} />{user.displayName} — {user.role}</label>)}</div></fieldset><button className="btn-primary"><Plus className="h-4 w-4" aria-hidden="true" />Criar equipe/setor</button></form>
-    {error && <StatusAlert tone="error">{error}</StatusAlert>}{success && <StatusAlert tone="success">{success}</StatusAlert>}
-    {loading ? <LoadingState label="Carregando equipes..." /> : <div className="grid gap-4">{teams.map((team) => { const draft = editing[team.id] ?? fromTeam(team); return <article key={team.id} className="space-y-4 border border-slate-300 p-4"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="lg:col-span-2"><label className="form-label" htmlFor={`team-edit-name-${team.id}`}>Nome</label><input id={`team-edit-name-${team.id}`} className="form-control" value={draft.name} onChange={(e) => setEditing({ ...editing, [team.id]: { ...draft, name: e.target.value } })} /></div><div><label className="form-label" htmlFor={`team-order-${team.id}`}>Ordem</label><input id={`team-order-${team.id}`} type="number" className="form-control" value={draft.sortOrder} onChange={(e) => setEditing({ ...editing, [team.id]: { ...draft, sortOrder: Number(e.target.value) } })} /></div><label className="flex items-end gap-2 pb-3"><input type="checkbox" checked={draft.active} onChange={(e) => setEditing({ ...editing, [team.id]: { ...draft, active: e.target.checked } })} />Equipe ativa</label><div className="sm:col-span-2 lg:col-span-4"><label className="form-label" htmlFor={`team-edit-desc-${team.id}`}>Descrição</label><input id={`team-edit-desc-${team.id}`} className="form-control" value={draft.description} onChange={(e) => setEditing({ ...editing, [team.id]: { ...draft, description: e.target.value } })} /></div></div><fieldset><legend className="form-label">Membros</legend><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{users.map((user) => <label className="flex items-center gap-2 border p-2" key={user.id}><input type="checkbox" checked={draft.memberAdminUserIds.includes(user.id)} onChange={(e) => toggleMember(team.id, user.id, e.target.checked)} />{user.displayName} — {user.role}</label>)}</div></fieldset><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-600">{draft.memberAdminUserIds.length} membro(s). Equipes historicamente utilizadas são desativadas, não apagadas.</p><button className="btn-primary" type="button" disabled={saving === team.id} onClick={() => void save(team)}><Save className="h-4 w-4" aria-hidden="true" />{saving === team.id ? 'Salvando...' : 'Salvar equipe'}</button></div></article>; })}</div>}
-  </div>;
+
+  const submit = async (event: FormEvent): Promise<void> => {
+    event.preventDefault();
+    try {
+      await operationsService.createTeam({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        notificationEmail: notificationEmail.trim() || undefined,
+        isInitialIntakeTeam,
+        sortOrder: (teams.at(-1)?.sortOrder ?? 0) + 10,
+        memberAdminUserIds: members,
+      });
+      setName('');
+      setDescription('');
+      setNotificationEmail('');
+      setIsInitialIntakeTeam(false);
+      setMembers([]);
+      setSuccess('Equipe/Setor criado e membros sincronizados.');
+      await load();
+    } catch (caught) {
+      setError(getErrorMessage(caught));
+    }
+  };
+
+  const save = async (team: OperationalTeam): Promise<void> => {
+    const draft = editing[team.id];
+    if (!draft) return;
+    setSaving(team.id);
+    try {
+      await operationsService.updateTeam(team.id, {
+        name: draft.name.trim(),
+        description: draft.description.trim() || undefined,
+        notificationEmail: draft.notificationEmail.trim() || undefined,
+        isInitialIntakeTeam: draft.isInitialIntakeTeam,
+        sortOrder: draft.sortOrder,
+        active: draft.active,
+        memberAdminUserIds: draft.memberAdminUserIds,
+      });
+      setSuccess(`Equipe/Setor “${draft.name}” atualizado.`);
+      await load();
+    } catch (caught) {
+      setError(getErrorMessage(caught));
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const toggleMember = (teamId: string, userId: string, checked: boolean): void => {
+    setEditing((all) => {
+      const draft = all[teamId];
+      if (!draft) return all;
+      return {
+        ...all,
+        [teamId]: {
+          ...draft,
+          memberAdminUserIds: checked
+            ? [...new Set([...draft.memberAdminUserIds, userId])]
+            : draft.memberAdminUserIds.filter((id) => id !== userId),
+        },
+      };
+    });
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Equipes e setores</h1>
+          <p className="mt-1 text-sm text-slate-700">Somente Administradores gerenciam a estrutura. O sistema exige exatamente uma equipe ativa como Triagem Inicial institucional com e-mail configurado.</p>
+        </div>
+        <button className="btn-secondary" onClick={() => void load()}><RefreshCw className="h-4 w-4" aria-hidden="true" />Atualizar</button>
+      </div>
+
+      <form className="space-y-4 border border-slate-300 p-5" onSubmit={(event) => void submit(event)}>
+        <h2 className="text-lg font-bold">Nova equipe/setor</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div><label className="form-label" htmlFor="team-name">Nome</label><input id="team-name" className="form-control" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} /></div>
+          <div><label className="form-label" htmlFor="team-email">E-mail para notificações</label><input id="team-email" type="email" className="form-control" placeholder="setor@ifes.edu.br" value={notificationEmail} onChange={(e) => setNotificationEmail(e.target.value)} /></div>
+          <div className="flex items-end pb-3"><label className="flex items-center gap-2"><input type="checkbox" checked={isInitialIntakeTeam} onChange={(e) => setIsInitialIntakeTeam(e.target.checked)} />Definir como Triagem Inicial</label></div>
+          <div className="sm:col-span-2 lg:col-span-3"><label className="form-label" htmlFor="team-desc">Descrição</label><input id="team-desc" className="form-control" maxLength={300} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+        </div>
+        <fieldset>
+          <legend className="form-label">Membros iniciais</legend>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {users.map((user) => (
+              <label className="flex items-center gap-2 border p-2" key={user.id}>
+                <input type="checkbox" checked={members.includes(user.id)} onChange={(e) => setMembers((current) => e.target.checked ? [...current, user.id] : current.filter((id) => id !== user.id))} />
+                {user.displayName} — {user.role}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <button className="btn-primary"><Plus className="h-4 w-4" aria-hidden="true" />Criar equipe/setor</button>
+      </form>
+
+      {error && <StatusAlert tone="error">{error}</StatusAlert>}
+      {success && <StatusAlert tone="success">{success}</StatusAlert>}
+
+      {loading ? <LoadingState label="Carregando equipes..." /> : (
+        <div className="grid gap-4">
+          {teams.map((team) => {
+            const draft = editing[team.id] ?? fromTeam(team);
+            return (
+              <article key={team.id} className="space-y-4 border border-slate-300 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-900">{team.name}</span>
+                    {team.isInitialIntakeTeam && (
+                      <span className="border border-green-400 bg-green-50 px-2 py-0.5 text-xs font-bold text-green-900">Triagem Inicial (CGAO)</span>
+                    )}
+                  </div>
+                  <span className="text-xs text-slate-500">ID: {team.id}</span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="lg:col-span-2">
+                    <label className="form-label" htmlFor={`team-edit-name-${team.id}`}>Nome</label>
+                    <input id={`team-edit-name-${team.id}`} className="form-control" value={draft.name} onChange={(e) => setEditing({ ...editing, [team.id]: { ...draft, name: e.target.value } })} />
+                  </div>
+                  <div>
+                    <label className="form-label" htmlFor={`team-edit-email-${team.id}`}>E-mail de notificação</label>
+                    <input id={`team-edit-email-${team.id}`} type="email" className="form-control" value={draft.notificationEmail} onChange={(e) => setEditing({ ...editing, [team.id]: { ...draft, notificationEmail: e.target.value } })} />
+                  </div>
+                  <div>
+                    <label className="form-label" htmlFor={`team-order-${team.id}`}>Ordem</label>
+                    <input id={`team-order-${team.id}`} type="number" className="form-control" value={draft.sortOrder} onChange={(e) => setEditing({ ...editing, [team.id]: { ...draft, sortOrder: Number(e.target.value) } })} />
+                  </div>
+                  <div className="flex items-center gap-4 sm:col-span-2">
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={draft.active} onChange={(e) => setEditing({ ...editing, [team.id]: { ...draft, active: e.target.checked } })} />
+                      Equipe ativa
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={draft.isInitialIntakeTeam} onChange={(e) => setEditing({ ...editing, [team.id]: { ...draft, isInitialIntakeTeam: e.target.checked } })} />
+                      Triagem Inicial institucional
+                    </label>
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-4">
+                    <label className="form-label" htmlFor={`team-edit-desc-${team.id}`}>Descrição</label>
+                    <input id={`team-edit-desc-${team.id}`} className="form-control" value={draft.description} onChange={(e) => setEditing({ ...editing, [team.id]: { ...draft, description: e.target.value } })} />
+                  </div>
+                </div>
+                <fieldset>
+                  <legend className="form-label">Membros</legend>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {users.map((user) => (
+                      <label className="flex items-center gap-2 border p-2" key={user.id}>
+                        <input type="checkbox" checked={draft.memberAdminUserIds.includes(user.id)} onChange={(e) => toggleMember(team.id, user.id, e.target.checked)} />
+                        {user.displayName} — {user.role}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs text-slate-600">{draft.memberAdminUserIds.length} membro(s). Equipes historicamente utilizadas são desativadas, não apagadas.</p>
+                  <button className="btn-primary" type="button" disabled={saving === team.id} onClick={() => void save(team)}>
+                    <Save className="h-4 w-4" aria-hidden="true" />{saving === team.id ? 'Salvando...' : 'Salvar equipe'}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }

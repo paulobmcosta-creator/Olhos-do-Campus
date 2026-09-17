@@ -6,7 +6,7 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getStorage, type Storage } from 'firebase-admin/storage';
 import sharp from 'sharp';
 import { CloudStoragePhotoRepository } from '../server/repositories/cloudStoragePhotoRepository';
-import type { PhotoObjectInfo, PhotoObjectMetadata, PhotoRepository } from '../server/repositories/photoRepository';
+import type { PhotoObjectInfo, PhotoObjectMetadata, PhotoObjectPage, PhotoRepository } from '../server/repositories/photoRepository';
 import { FirestoreStorageCleanupTaskRepository } from '../server/repositories/storageCleanupTaskRepository';
 import { ImageProcessingService } from '../server/services/imageProcessingService';
 import { PhotoService } from '../server/services/photoService';
@@ -39,12 +39,13 @@ function path(kind: 'initial' | 'initial-thumbnails' | 'resolution' | 'resolutio
 }
 
 class FaultInjectingPhotoRepository implements PhotoRepository {
+  public readonly provider: PhotoRepository['provider'];
   public readonly attemptedSaves: string[] = [];
   public readonly attemptedDeletes: string[] = [];
   public failSaveAtCall?: number;
   public failDeletePaths = new Set<string>();
 
-  public constructor(private readonly delegate: PhotoRepository) {}
+  public constructor(private readonly delegate: PhotoRepository) { this.provider = delegate.provider; }
 
   public async save(path: string, buffer: Buffer, metadata: PhotoObjectMetadata): Promise<void> {
     this.attemptedSaves.push(path);
@@ -61,6 +62,7 @@ class FaultInjectingPhotoRepository implements PhotoRepository {
   }
 
   public getMetadata(path: string): Promise<PhotoObjectInfo | undefined> { return this.delegate.getMetadata(path); }
+  public listPage(prefix: string, cursor?: string, limit?: number): Promise<PhotoObjectPage> { return this.delegate.listPage(prefix, cursor, limit); }
 }
 
 describe('CloudStoragePhotoRepository no Storage Emulator', { timeout: 30000 }, () => {

@@ -63,7 +63,9 @@ describe('cliente HTTP autenticado', () => {
 
   it('aceita somente image/webp nas respostas binárias protegidas', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'Content-Type': 'image/webp' } }))));
-    await expect(requestBlob('/api/photo', { authentication: 'public' })).resolves.toBeInstanceOf(Blob);
+    const webp = await requestBlob('/api/photo', { authentication: 'public' });
+    expect(webp.type).toBe('image/webp');
+    expect(webp.size).toBe(3);
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'Content-Type': 'image/png' } }))));
     await expect(requestBlob('/api/photo', { authentication: 'public' })).rejects.toMatchObject({ code: 'INTERNAL_ERROR' });
   });

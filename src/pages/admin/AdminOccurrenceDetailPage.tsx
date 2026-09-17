@@ -79,6 +79,22 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
   const [success, setSuccess] = useState<string | null>(null);
   const [newVersionAvailable, setNewVersionAvailable] = useState(false);
 
+  const isAttendant = session?.user.role === 'Atendente';
+
+  const allowedStatuses = useMemo<OccurrenceStatus[]>(() => {
+    if (!isAttendant || occurrence === null) return [...OCCURRENCE_STATUSES];
+    const current = occurrence.status;
+    const transitions: Record<string, OccurrenceStatus[]> = {
+      'Em análise': ['Em atendimento'],
+      'Encaminhada ao setor responsável': ['Em atendimento'],
+      'Em atendimento': ['Aguardando material', 'Aguardando contratação ou serviço externo', 'Resolvida'],
+      'Aguardando material': ['Em atendimento'],
+      'Aguardando contratação ou serviço externo': ['Em atendimento'],
+    };
+    const targets = transitions[current] ?? [];
+    return [current, ...targets.filter((s) => s !== current)];
+  }, [isAttendant, occurrence]);
+
   const applyLoaded = useCallback((loaded: Occurrence): void => {
     setOccurrence(loaded);
     setStatus(loaded.status);
@@ -88,8 +104,11 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
     setAssignedTeamId(loaded.assignedTeamId ?? '');
     setAssignedToAdminUserId(loaded.assignedToAdminUserId ?? '');
     setDuplicateOfProtocol(loaded.duplicateOfProtocol ?? '');
+    if (session?.user.role === 'Atendente') {
+      setInternalNoteAudience('RESPONSIBLE_TEAM');
+    }
     setNewVersionAvailable(false);
-  }, []);
+  }, [session?.user.role]);
 
   const loadOccurrence = useCallback(async (): Promise<void> => {
     if (session === null || id === undefined) return;
@@ -100,12 +119,15 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
   useEffect(() => {
     if (session === null || id === undefined) return;
     let ignore = false;
+    const assigneesPromise = isAttendant
+      ? Promise.resolve([] as AdminAssignee[])
+      : adminService.listAssignees();
     Promise.all([
       occurrenceService.getAdminById(id),
       operationsService.listCategories(),
       operationsService.listLocations(),
       operationsService.listTeams(),
-      adminService.listAssignees(),
+      assigneesPromise,
     ]).then(([loaded, categoryItems, campusItems, teamItems, assigneeItems]) => {
       if (ignore) return;
       applyLoaded(loaded);
@@ -120,7 +142,7 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
       if (!ignore) setLoading(false);
     });
     return () => { ignore = true; };
-  }, [applyLoaded, id, session]);
+  }, [applyLoaded, id, isAttendant, session]);
 
   useEffect(() => {
     if (session === null || id === undefined || occurrence === null) return;
@@ -164,29 +186,30 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
     if (session === null || id === undefined || occurrence === null) return;
     setSaving(true); setError(null); setSuccess(null);
     try {
+      const audience: InternalNoteAudience = isAttendant ? 'RESPONSIBLE_TEAM' : internalNoteAudience;
       const normalizedAssignment = assignedToAdminUserId.trim();
       const normalizedTeam = assignedTeamId.trim();
       const normalizedDuplicate = duplicateOfProtocol.trim().toUpperCase();
-      const categoryChanged = categoryId !== occurrence.categoryId;
+      const categoryChanged = !isAttendant && categoryId !== occurrence.categoryId;
       const currentSelection = selectionFromOccurrence(occurrence);
-      const locationChanged = locationSelection !== null && JSON.stringify(locationSelection) !== JSON.stringify(currentSelection);
+      const locationChanged = !isAttendant && locationSelection !== null && JSON.stringify(locationSelection) !== JSON.stringify(currentSelection);
       if (categoryChanged && categoryReason.trim().length < 10) throw new Error('Informe uma justificativa da recategorização com pelo menos 10 caracteres.');
       if (locationChanged && locationReason.trim().length < 10) throw new Error('Informe uma justificativa da correção do local com pelo menos 10 caracteres.');
-      if (normalizedAssignment && normalizedTeam && !eligibleAssignees.some((item) => item.id === normalizedAssignment)) throw new Error('O responsável individual deve integrar a equipe selecionada.');
-      if (internalNote.trim() && internalNoteAudience === 'ADMIN_ONLY' && session.user.role !== 'Administrador') throw new Error('Somente Administradores podem usar a audiência “Somente administradores”.');
-      if (internalNote.trim() && internalNoteAudience === 'RESPONSIBLE_TEAM' && !normalizedTeam) throw new Error('Selecione uma equipe responsável antes de usar a audiência “Equipe responsável”.');
-      if (internalNote.trim() && internalNoteAudience === 'RESPONSIBLE_TEAM' && session.user.role !== 'Administrador' && !session.user.teamIds.includes(normalizedTeam)) throw new Error('Você precisa integrar a equipe responsável para usar essa audiência.');
+      if (!isAttendant && normalizedAssignment && normalizedTeam && !eligibleAssignees.some((item) => item.id === normalizedAssignment)) throw new Error('O responsável individual deve integrar a equipe selecionada.');
+      if (internalNote.trim() && audience === 'ADMIN_ONLY' && session.user.role !== 'Administrador') throw new Error('Somente Administradores podem usar a audiência “Somente administradores”.');
+      if (internalNote.trim() && audience === 'RESPONSIBLE_TEAM' && !normalizedTeam) throw new Error('Selecione uma equipe responsável antes de usar a audiência “Equipe responsável”.');
+      if (internalNote.trim() && audience === 'RESPONSIBLE_TEAM' && session.user.role !== 'Administrador' && !session.user.teamIds.includes(normalizedTeam)) throw new Error('Você precisa integrar a equipe responsável para usar essa audiência.');
       const input: UpdateOccurrenceInput = {
         expectedVersion: occurrence.version,
         ...(status === occurrence.status ? {} : { status }),
-        ...(priority === occurrence.priority ? {} : { priority }),
+        ...(!isAttendant && priority !== occurrence.priority ? { priority } : {}),
         ...(categoryChanged ? { categoryId, categoryChangeReason: categoryReason.trim() } : {}),
         ...(locationChanged && locationSelection ? { location: locationSelection, locationChangeReason: locationReason.trim() } : {}),
-        ...(normalizedTeam !== (occurrence.assignedTeamId ?? '') ? { assignedTeamId: normalizedTeam === '' ? null : normalizedTeam } : {}),
-        ...(normalizedAssignment !== (occurrence.assignedToAdminUserId ?? '') ? { assignedToAdminUserId: normalizedAssignment === '' ? null : normalizedAssignment } : {}),
-        ...(status === 'Duplicada' && normalizedDuplicate !== (occurrence.duplicateOfProtocol ?? '') ? { duplicateOfProtocol: normalizedDuplicate === '' ? null : normalizedDuplicate } : {}),
+        ...(!isAttendant && normalizedTeam !== (occurrence.assignedTeamId ?? '') ? { assignedTeamId: normalizedTeam === '' ? null : normalizedTeam } : {}),
+        ...(!isAttendant && normalizedAssignment !== (occurrence.assignedToAdminUserId ?? '') ? { assignedToAdminUserId: normalizedAssignment === '' ? null : normalizedAssignment } : {}),
+        ...(!isAttendant && status === 'Duplicada' && normalizedDuplicate !== (occurrence.duplicateOfProtocol ?? '') ? { duplicateOfProtocol: normalizedDuplicate === '' ? null : normalizedDuplicate } : {}),
         ...(publicMessage.trim() === '' ? {} : { newPublicMessage: publicMessage.trim() }),
-        ...(internalNote.trim() === '' ? {} : { newInternalNote: internalNote.trim(), internalNoteAudience }),
+        ...(internalNote.trim() === '' ? {} : { newInternalNote: internalNote.trim(), internalNoteAudience: audience }),
       };
       if (Object.keys(input).length === 1) { setError('Informe ao menos uma alteração.'); return; }
       const updated = await occurrenceService.update(id, input);
@@ -195,9 +218,19 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
       setSuccess(`Alterações registradas. Versão atual: ${updated.version}.`);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
-        try { await loadOccurrence(); setError('A ocorrência foi atualizada por outro usuário. Os dados foram recarregados; revise as alterações antes de tentar novamente.'); }
-        catch { setError(getErrorMessage(caught)); }
-      } else setError(getErrorMessage(caught));
+        if (caught.code === 'INVALID_STATUS_TRANSITION') {
+          setError(caught.message || 'A alteração de situação solicitada não é permitida a partir da situação atual.');
+        } else {
+          try {
+            await loadOccurrence();
+            setError('Esta ocorrência foi atualizada por outra operação. Recarregue os dados e tente novamente.');
+          } catch {
+            setError(getErrorMessage(caught));
+          }
+        }
+      } else {
+        setError(getErrorMessage(caught));
+      }
     } finally { setSaving(false); }
   };
 
@@ -234,10 +267,10 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
               <div><dt className="detail-term">Equipe responsável</dt><dd className="detail-value">{occurrence.assignedTeamNameSnapshot ?? 'Não atribuída'}</dd></div>
               <div className="sm:col-span-2"><dt className="detail-term">Local atual</dt><dd className="detail-value">{locationText(occurrence.location)}</dd></div>
               <div className="sm:col-span-2"><dt className="detail-term">Local informado originalmente</dt><dd className="detail-value">{locationText(occurrence.reportedLocation)}</dd></div>
-              <div><dt className="detail-term">Gestor responsável</dt><dd className="detail-value">{occurrence.assignedToDisplayNameSnapshot ?? 'Não atribuído'}</dd></div>
+              <div><dt className="detail-term">Responsável</dt><dd className="detail-value">{occurrence.assignedToDisplayNameSnapshot ?? 'Não atribuído'}</dd></div>
               <div><dt className="detail-term">Ocorrência principal</dt><dd className="detail-value">{occurrence.duplicateOfProtocol ?? 'Não se aplica'}</dd></div>
-              <div><dt className="detail-term">Tempo total aberto</dt><dd className="detail-value">{occurrence.totalOpenHours.toFixed(1)} h corridas</dd></div>
-              <div><dt className="detail-term">Tempo efetivo de SLA</dt><dd className="detail-value">{occurrence.effectiveBusinessHours.toFixed(1)} h úteis</dd></div>
+              <div><dt className="detail-term">Tempo total aberto</dt><dd className="detail-value">{(occurrence.totalOpenHours ?? 0).toFixed(1)} h corridas</dd></div>
+              <div><dt className="detail-term">Tempo efetivo de SLA</dt><dd className="detail-value">{(occurrence.effectiveBusinessHours ?? 0).toFixed(1)} h úteis</dd></div>
               {occurrence.sla && <><div><dt className="detail-term">Prazo da primeira resposta</dt><dd className="detail-value">{formatDateTime(occurrence.sla.firstResponseDueAt)}{occurrence.sla.firstResponseOutcome ? ` — ${occurrence.sla.firstResponseOutcome === 'ON_TIME' ? 'no prazo' : 'vencido'}` : ''}</dd></div><div><dt className="detail-term">Prazo de conclusão</dt><dd className="detail-value">{formatDateTime(occurrence.sla.resolutionDueAt)} — {occurrence.sla.resolutionPaused ? 'SLA pausado' : occurrence.slaStatus ?? 'em acompanhamento'}</dd></div></>}
               <div className="sm:col-span-2"><dt className="detail-term">Descrição</dt><dd className="detail-value whitespace-pre-wrap leading-6">{occurrence.description}</dd></div>
             </dl>
@@ -245,24 +278,44 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
 
           {session !== null && <AdminPhotoGallery occurrence={occurrence} role={session.user.role} onOccurrenceUpdated={applyLoaded} />}
 
-          <section className="border border-slate-300 p-5"><h2 className="text-lg font-bold text-slate-950">Histórico funcional</h2><ol className="mt-4 space-y-4 border-l-2 border-green-700 pl-5">{occurrence.timeline.map((item) => <li key={item.id}><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-slate-900">{item.title}</p><span className={`border px-2 py-0.5 text-[11px] font-semibold ${item.isPublic ? 'border-green-300 bg-green-50 text-green-900' : 'border-slate-300 bg-slate-100 text-slate-700'}`}>{item.isPublic ? 'Público' : 'Interno'}</span></div><p className="text-xs text-slate-500">{formatDateTime(item.date)}{item.authorRole ? ` — ${item.authorRole}` : ''}</p>{item.description && <p className="mt-1 text-sm leading-6 text-slate-700">{item.description}</p>}</li>)}</ol></section>
-          <section className="border border-slate-300 p-5"><h2 className="text-lg font-bold text-slate-950">Mensagens públicas</h2><div className="mt-4 space-y-3">{occurrence.publicMessages.map((message) => <article key={message.id} className="border border-green-200 bg-green-50 p-4"><p className="text-sm leading-6 text-slate-800">{message.message}</p><p className="mt-2 text-xs text-slate-500">{message.authorRole} — {formatDateTime(message.date)}</p></article>)}{occurrence.publicMessages.length === 0 && <p className="text-sm text-slate-600">Nenhuma mensagem pública adicional.</p>}</div></section>
-          <section className="border border-slate-300 p-5"><h2 className="text-lg font-bold text-slate-950">Observações administrativas internas</h2><p className="mt-1 text-xs text-slate-600">Nunca são retornadas pela consulta pública. A audiência é aplicada também pelo backend.</p><div className="mt-4 space-y-3">{occurrence.internalNotes.map((note) => <article key={note.id} className="border border-slate-300 bg-slate-50 p-4"><p className="text-sm leading-6 text-slate-800">{note.note}</p><p className="mt-2 text-xs text-slate-500">{note.authorName} — {note.authorRole} — {formatDateTime(note.date)} — {AUDIENCE_LABELS[note.audience]}</p></article>)}{occurrence.internalNotes.length === 0 && <p className="text-sm text-slate-600">Nenhuma observação interna visível para sua audiência.</p>}</div></section>
+          <section className="border border-slate-300 p-5"><h2 className="text-lg font-bold text-slate-950">Histórico funcional</h2><ol className="mt-4 space-y-4 border-l-2 border-green-700 pl-5">{(occurrence.timeline ?? []).map((item) => <li key={item.id}><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-slate-900">{item.title}</p><span className={`border px-2 py-0.5 text-[11px] font-semibold ${item.isPublic ? 'border-green-300 bg-green-50 text-green-900' : 'border-slate-300 bg-slate-100 text-slate-700'}`}>{item.isPublic ? 'Público' : 'Interno'}</span></div><p className="text-xs text-slate-500">{formatDateTime(item.date)}{item.authorRole ? ` — ${item.authorRole}` : ''}</p>{item.description && <p className="mt-1 text-sm leading-6 text-slate-700">{item.description}</p>}</li>)}</ol></section>
+          <section className="border border-slate-300 p-5"><h2 className="text-lg font-bold text-slate-950">Mensagens públicas</h2><div className="mt-4 space-y-3">{(occurrence.publicMessages ?? []).map((message) => <article key={message.id} className="border border-green-200 bg-green-50 p-4"><p className="text-sm leading-6 text-slate-800">{message.message}</p><p className="mt-2 text-xs text-slate-500">{message.authorRole} — {formatDateTime(message.date)}</p></article>)}{(occurrence.publicMessages ?? []).length === 0 && <p className="text-sm text-slate-600">Nenhuma mensagem pública adicional.</p>}</div></section>
+          <section className="border border-slate-300 p-5"><h2 className="text-lg font-bold text-slate-950">Observações administrativas internas</h2><p className="mt-1 text-xs text-slate-600">Nunca são retornadas pela consulta pública. A audiência é aplicada também pelo backend.</p><div className="mt-4 space-y-3">{(occurrence.internalNotes ?? []).map((note) => <article key={note.id} className="border border-slate-300 bg-slate-50 p-4"><p className="text-sm leading-6 text-slate-800">{note.note}</p><p className="mt-2 text-xs text-slate-500">{note.authorName} — {note.authorRole} — {formatDateTime(note.date)} — {AUDIENCE_LABELS[note.audience]}</p></article>)}{(occurrence.internalNotes ?? []).length === 0 && <p className="text-sm text-slate-600">Nenhuma observação interna visível para sua audiência.</p>}</div></section>
         </div>
 
         <aside>
           <form onSubmit={(event) => void submit(event)} className="space-y-5 border border-slate-300 bg-slate-50 p-5 lg:sticky lg:top-4">
-            <h2 className="text-lg font-bold text-slate-950">Gestão operacional</h2>
-            <div><label htmlFor="admin-status" className="form-label">Situação</label><select id="admin-status" className="form-control" value={status} onChange={(event) => { if (isOccurrenceStatus(event.target.value)) setStatus(event.target.value); }}>{OCCURRENCE_STATUSES.map((item) => <option key={item} value={item}>{item}</option>)}</select><p className="mt-1 text-xs text-slate-500">A máquina de estados no servidor rejeita transições não permitidas.</p></div>
-            <div><label htmlFor="admin-priority" className="form-label">Prioridade</label><select id="admin-priority" className="form-control" value={priority} onChange={(event) => { if (isOccurrencePriority(event.target.value)) setPriority(event.target.value); }}>{OCCURRENCE_PRIORITIES.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
-            <fieldset className="space-y-3 border border-slate-300 p-3"><legend className="px-1 text-sm font-bold text-slate-900">Correção de categoria</legend><div><label htmlFor="admin-category" className="form-label">Categoria atual</label><select id="admin-category" className="form-control" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>{categories.filter((item) => item.active || item.id === occurrence.categoryId).sort((a,b)=>a.sortOrder-b.sortOrder).map((item) => <option key={item.id} value={item.id}>{item.name}{item.active ? '' : ' — inativa'}</option>)}</select></div>{categoryId !== occurrence.categoryId && <div><label htmlFor="category-reason" className="form-label">Justificativa obrigatória</label><textarea id="category-reason" className="form-control min-h-20" value={categoryReason} maxLength={500} onChange={(e)=>setCategoryReason(e.target.value)} required /></div>}<p className="text-xs text-slate-500">O valor originalmente informado pelo comunicante permanece imutável.</p></fieldset>
-            <fieldset className="space-y-3 border border-slate-300 p-3"><legend className="px-1 text-sm font-bold text-slate-900">Correção de local</legend>{locations.length > 1 && <div><label className="form-label" htmlFor="admin-campus">Campus</label><select id="admin-campus" className="form-control" value={selectedCampus?.id ?? ''} onChange={(e)=>changeCampus(e.target.value)}>{locations.map((campus)=><option key={campus.id} value={campus.id}>{campus.campusName}</option>)}</select></div>}<div><label className="form-label" htmlFor="admin-area">Bloco/Área</label><select id="admin-area" className="form-control" value={selectedArea?.id ?? ''} onChange={(e)=>changeArea(e.target.value)}>{selectedCampus?.buildings.filter((area)=>area.active!==false || area.id===occurrence.location.buildingId).sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0)).map((area)=><option key={area.id} value={area.id}>{area.name}</option>)}</select></div><div><label className="form-label" htmlFor="admin-room">Ambiente</label><select id="admin-room" className="form-control" value={locationSelection?.roomId ?? ''} onChange={(e)=>changeRoom(e.target.value)}>{selectedFloor?.rooms.filter((room)=>room.active!==false || room.id===occurrence.location.roomId).sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0)).map((room)=><option key={room.id} value={room.id}>{room.name}</option>)}</select></div>{locationSelection && JSON.stringify(locationSelection)!==JSON.stringify(selectionFromOccurrence(occurrence)) && <div><label htmlFor="location-reason" className="form-label">Justificativa obrigatória</label><textarea id="location-reason" className="form-control min-h-20" value={locationReason} maxLength={500} onChange={(e)=>setLocationReason(e.target.value)} required /></div>}<p className="text-xs text-slate-500">O local reportado originalmente permanece disponível no histórico administrativo.</p></fieldset>
-            <div><label htmlFor="admin-team" className="form-label">Equipe/Setor responsável</label><select id="admin-team" className="form-control" value={assignedTeamId} onChange={(event) => { const value=event.target.value;setAssignedTeamId(value);if(value && !teams.find((t)=>t.id===value)?.memberAdminUserIds.includes(assignedToAdminUserId))setAssignedToAdminUserId(''); }}><option value="">Sem equipe</option>{teams.filter((team)=>team.active || team.id===occurrence.assignedTeamId).sort((a,b)=>a.sortOrder-b.sortOrder).map((team)=><option key={team.id} value={team.id}>{team.name}{team.active?'':' — inativa'}</option>)}</select></div>
-            <div><label htmlFor="admin-assigned" className="form-label">Gestor responsável <span className="font-normal text-slate-500">(opcional)</span></label><select id="admin-assigned" className="form-control" value={assignedToAdminUserId} onChange={(event) => setAssignedToAdminUserId(event.target.value)}><option value="">Não atribuído</option>{assignedToAdminUserId !== '' && !eligibleAssignees.some((item) => item.id === assignedToAdminUserId) && <option value={assignedToAdminUserId}>{occurrence.assignedToDisplayNameSnapshot ?? 'Responsável atual'}</option>}{eligibleAssignees.map((item) => <option key={item.id} value={item.id}>{item.displayName} — {item.role}</option>)}</select></div>
-            {status === 'Duplicada' && <div><label htmlFor="duplicate-protocol" className="form-label">Protocolo da ocorrência principal</label><input id="duplicate-protocol" className="form-control font-mono uppercase" value={duplicateOfProtocol} onChange={(event) => setDuplicateOfProtocol(event.target.value.toUpperCase())} placeholder="INF-2026-000001" required /></div>}
+            <h2 className="text-lg font-bold text-slate-950">{isAttendant ? 'Atendimento da ocorrência' : 'Gestão operacional'}</h2>
+            <div><label htmlFor="admin-status" className="form-label">Situação</label><select id="admin-status" className="form-control" value={status} onChange={(event) => { if (isOccurrenceStatus(event.target.value)) setStatus(event.target.value); }}>{allowedStatuses.map((item) => <option key={item} value={item}>{item}</option>)}</select><p className="mt-1 text-xs text-slate-500">A máquina de estados no servidor rejeita transições não permitidas.</p></div>
+            {!isAttendant ? (
+              <>
+                <div><label htmlFor="admin-priority" className="form-label">Prioridade</label><select id="admin-priority" className="form-control" value={priority} onChange={(event) => { if (isOccurrencePriority(event.target.value)) setPriority(event.target.value); }}>{OCCURRENCE_PRIORITIES.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
+                <fieldset className="space-y-3 border border-slate-300 p-3"><legend className="px-1 text-sm font-bold text-slate-900">Correção de categoria</legend><div><label htmlFor="admin-category" className="form-label">Categoria atual</label><select id="admin-category" className="form-control" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>{categories.filter((item) => item.active || item.id === occurrence.categoryId).sort((a,b)=>a.sortOrder-b.sortOrder).map((item) => <option key={item.id} value={item.id}>{item.name}{item.active ? '' : ' — inativa'}</option>)}</select></div>{categoryId !== occurrence.categoryId && <div><label htmlFor="category-reason" className="form-label">Justificativa obrigatória</label><textarea id="category-reason" className="form-control min-h-20" value={categoryReason} maxLength={500} onChange={(e)=>setCategoryReason(e.target.value)} required /></div>}<p className="text-xs text-slate-500">O valor originalmente informado pelo comunicante permanece imutável.</p></fieldset>
+                <fieldset className="space-y-3 border border-slate-300 p-3"><legend className="px-1 text-sm font-bold text-slate-900">Correção de local</legend>{locations.length > 1 && <div><label className="form-label" htmlFor="admin-campus">Campus</label><select id="admin-campus" className="form-control" value={selectedCampus?.id ?? ''} onChange={(e)=>changeCampus(e.target.value)}>{locations.map((campus)=><option key={campus.id} value={campus.id}>{campus.campusName}</option>)}</select></div>}<div><label className="form-label" htmlFor="admin-area">Bloco/Área</label><select id="admin-area" className="form-control" value={selectedArea?.id ?? ''} onChange={(e)=>changeArea(e.target.value)}>{selectedCampus?.buildings.filter((area)=>area.active!==false || area.id===occurrence.location.buildingId).sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0)).map((area)=><option key={area.id} value={area.id}>{area.name}</option>)}</select></div><div><label className="form-label" htmlFor="admin-room">Ambiente</label><select id="admin-room" className="form-control" value={locationSelection?.roomId ?? ''} onChange={(e)=>changeRoom(e.target.value)}>{selectedFloor?.rooms.filter((room)=>room.active!==false || room.id===occurrence.location.roomId).sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0)).map((room)=><option key={room.id} value={room.id}>{room.name}</option>)}</select></div>{locationSelection && JSON.stringify(locationSelection)!==JSON.stringify(selectionFromOccurrence(occurrence)) && <div><label htmlFor="location-reason" className="form-label">Justificativa obrigatória</label><textarea id="location-reason" className="form-control min-h-20" value={locationReason} maxLength={500} onChange={(e)=>setLocationReason(e.target.value)} required /></div>}<p className="text-xs text-slate-500">O local reportado originalmente permanece disponível no histórico administrativo.</p></fieldset>
+                <div><label htmlFor="admin-team" className="form-label">Equipe/Setor responsável</label><select id="admin-team" className="form-control" value={assignedTeamId} onChange={(event) => { const value=event.target.value;setAssignedTeamId(value);if(value && !teams.find((t)=>t.id===value)?.memberAdminUserIds.includes(assignedToAdminUserId))setAssignedToAdminUserId(''); }}><option value="">Sem equipe</option>{teams.filter((team)=>team.active || team.id===occurrence.assignedTeamId).sort((a,b)=>a.sortOrder-b.sortOrder).map((team)=><option key={team.id} value={team.id}>{team.name}{team.active?'':' — inativa'}</option>)}</select></div>
+                <div><label htmlFor="admin-assigned" className="form-label">Responsável <span className="font-normal text-slate-500">(opcional)</span></label><select id="admin-assigned" className="form-control" value={assignedToAdminUserId} onChange={(event) => setAssignedToAdminUserId(event.target.value)}><option value="">Não atribuído</option>{assignedToAdminUserId !== '' && !eligibleAssignees.some((item) => item.id === assignedToAdminUserId) && <option value={assignedToAdminUserId}>{occurrence.assignedToDisplayNameSnapshot ?? 'Responsável atual'}</option>}{eligibleAssignees.map((item) => <option key={item.id} value={item.id}>{item.displayName} — {item.role}</option>)}</select></div>
+              </>
+            ) : (
+              <div className="space-y-4 rounded border border-slate-200 bg-white p-3">
+                <div>
+                  <span className="form-label">Prioridade</span>
+                  <div className="mt-1"><PriorityBadge priority={occurrence.priority} /></div>
+                </div>
+                <div>
+                  <span className="form-label">Equipe responsável</span>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">{occurrence.assignedTeamNameSnapshot ?? 'Não atribuída'}</p>
+                </div>
+                <div>
+                  <span className="form-label">Responsável atribuído</span>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">{occurrence.assignedToDisplayNameSnapshot ?? 'Não atribuído'}</p>
+                </div>
+              </div>
+            )}
+            {!isAttendant && status === 'Duplicada' && <div><label htmlFor="duplicate-protocol" className="form-label">Protocolo da ocorrência principal</label><input id="duplicate-protocol" className="form-control font-mono uppercase" value={duplicateOfProtocol} onChange={(event) => setDuplicateOfProtocol(event.target.value.toUpperCase())} placeholder="INF-2026-000001" required /></div>}
             <div><label htmlFor="admin-public-message" className="form-label">Nova mensagem pública <span className="font-normal text-slate-500">(opcional)</span></label><textarea id="admin-public-message" className="form-control min-h-24" maxLength={1000} value={publicMessage} onChange={(event) => setPublicMessage(event.target.value)} /></div>
             <div><label htmlFor="admin-internal-note" className="form-label">Nova observação interna <span className="font-normal text-slate-500">(opcional)</span></label><textarea id="admin-internal-note" className="form-control min-h-24" maxLength={1000} value={internalNote} onChange={(event) => setInternalNote(event.target.value)} /></div>
-            {internalNote.trim() && <div><label htmlFor="note-audience" className="form-label">Audiência da observação</label><select id="note-audience" className="form-control" value={internalNoteAudience} onChange={(e)=>{const value=e.target.value;if(INTERNAL_NOTE_AUDIENCES.some((item)=>item===value))setInternalNoteAudience(value as InternalNoteAudience);}}>{INTERNAL_NOTE_AUDIENCES.map((audience)=><option key={audience} value={audience} disabled={(audience==='ADMIN_ONLY'&&session?.user.role!=='Administrador')||(audience==='RESPONSIBLE_TEAM'&&(!assignedTeamId||(session?.user.role!=='Administrador'&&!session?.user.teamIds.includes(assignedTeamId))))}>{AUDIENCE_LABELS[audience]}</option>)}</select></div>}
+            {internalNote.trim() && !isAttendant && <div><label htmlFor="note-audience" className="form-label">Audiência da observação</label><select id="note-audience" className="form-control" value={internalNoteAudience} onChange={(e)=>{const value=e.target.value;if(INTERNAL_NOTE_AUDIENCES.some((item)=>item===value))setInternalNoteAudience(value as InternalNoteAudience);}}>{INTERNAL_NOTE_AUDIENCES.map((audience)=><option key={audience} value={audience} disabled={(audience==='ADMIN_ONLY'&&session?.user.role!=='Administrador')||(audience==='RESPONSIBLE_TEAM'&&(!assignedTeamId||(session?.user.role!=='Administrador'&&!session?.user.teamIds.includes(assignedTeamId))))}>{AUDIENCE_LABELS[audience]}</option>)}</select></div>}
+            {internalNote.trim() && isAttendant && <p className="text-xs text-slate-600">Observação direcionada à equipe responsável.</p>}
             {error !== null && <StatusAlert tone="error">{error}</StatusAlert>}{success !== null && <StatusAlert tone="success">{success}</StatusAlert>}
             <button type="submit" className="btn-primary w-full" disabled={saving}><Save className="h-4 w-4" aria-hidden="true" />{saving ? 'Salvando...' : 'Registrar alterações'}</button>
             {session?.user.role === 'Administrador' && occurrence.dataClassification === 'TEST' && <button type="button" className="btn-secondary w-full border-red-300 text-red-800" onClick={() => void purgeTest()} disabled={deletingTest}><Trash2 className="h-4 w-4" aria-hidden="true" />{deletingTest ? 'Excluindo dado TEST...' : 'Excluir definitivamente dado TEST'}</button>}

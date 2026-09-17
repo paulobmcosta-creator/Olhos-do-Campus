@@ -1,0 +1,20 @@
+[
+  {
+    "name": "delete-old-versions",
+    "action": { "type": "Delete" },
+    "condition": { "tagState": "any", "olderThan": "30d" }
+  },
+  {
+    "name": "keep-protected-tags",
+    "action": { "type": "Keep" },
+    "condition": {
+      "tagState": "tagged",
+      "tagPrefixes": ["release-", "keep-", "rollback-"]
+    }
+  },
+  {
+    "name": "keep-recent-for-rollback",
+    "action": { "type": "Keep" },
+    "mostRecentVersions": { "keepCount": 10 }
+  }
+]

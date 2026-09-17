@@ -1,260 +1,173 @@
-# Olhos do Campus
+﻿# Olhos do Campus
 
 **Sistema Institucional de Manutenção da Infraestrutura Física**  
 **Instituto Federal do Espírito Santo — Campus Barra de São Francisco**  
-**Versão:** 0.6.2
+**Versão 1.0.0**
 
-> Ajude-nos a cuidar e melhorar os espaços do campus.
+Aplicação institucional para registro de ocorrências de manutenção da infraestrutura física sem identificação pessoal obrigatória, acompanhamento por protocolo e chave de acompanhamento no portal público, e gestão operacional e administrativa pelo corpo técnico e gestor do IFES Campus Barra de São Francisco.
 
-Aplicação web institucional para registro, gerenciamento e acompanhamento de ocorrências de infraestrutura física. O registro público não exige identificação pessoal obrigatória; a consulta pública exige protocolo e chave de acompanhamento.
+A versão 1.0.0 consolida a promoção formal da árvore estável homologada no Ciclo 0.9.0, alinhando a identidade de release em todos os componentes, corrigindo a versão em runtime do Cloudflare Maintenance Worker, endurecendo o verificador de conformidade de release e eliminando inconsistências documentais legadas.
 
-## Hotfix 0.6.2 — contrato de bootstrap no Preview
+---
 
-A versão 0.6.2 corrige uma regressão de versionamento introduzida ao publicar a 0.6.1. O backend já retornava `runtime.version = 0.6.1`, porém o frontend ainda validava literalmente `0.6.0` em `RuntimeInfo` e `bootstrapResponseSchema`. Como consequência, o endpoint `/api/config` respondia corretamente, mas o cliente rejeitava o payload e exibia **“O serviço retornou dados incompatíveis com o contrato esperado.”**
+## 1. Arquitetura
 
-A partir desta versão, o modelo e o schema Zod de bootstrap derivam de `APP_VERSION`, impedindo divergência futura entre backend, frontend e metadados. A correção de empacotamento da 0.6.1 permanece integralmente preservada.
-
-Consulte `docs/RELATORIO_IMPLEMENTACAO_0.6.2.md` e `docs/TESTES_0.6.2.md`.
-
-## Hotfix 0.6.1 — publicação no AI Studio / Cloud Run
-
-A versão 0.6.1 preserva integralmente o escopo funcional da 0.6.0 e corrige somente a preparação do artefato de produção. O diagnóstico da tentativa de publicação mostrou que o AI Studio estava formando um `build_artifacts.tar.gz` truncado, com 249.560.700 bytes e 39.388 entradas em `node_modules`, incluindo ferramentas de desenvolvimento como Firebase CLI, ESLint, Vitest e jsdom.
-
-Ao final do `npm run build`, o projeto agora executa `scripts/prepareProductionPackage.mjs`, que:
-
-- executa `npm prune --omit=dev --no-audit --no-fund`;
-- preserva as dependências de produção;
-- remove `bun.lock` e `bun.lockb` caso sejam gerados pelo ambiente;
-- mantém `package.json`, `package-lock.json`, `dist/`, código e configurações Firebase;
-- falha explicitamente se o `npm prune` não concluir com sucesso.
-
-A correção não altera domínio, UI, autenticação, App Check, Firestore, Storage, SLA, permissões ou modelos de dados. Consulte `docs/RELATORIO_IMPLEMENTACAO_0.6.1.md` e `docs/TESTES_0.6.1.md`.
-
-## Escopo da versão 0.6.0
-
-A 0.6.0 transforma o painel administrativo em ferramenta de gestão operacional, mantendo a arquitetura Firebase server-only da série 0.5.x. Esta entrega parte, por autorização expressa do usuário, do ZIP final identificado internamente como **0.5.1**; a especificação original previa 0.5.2, e essa divergência é registrada de forma explícita na documentação de migração e implementação.
-
-Principais capacidades:
-
-- dois papéis administrativos ativos: **Administrador** e **Gestor**;
-- detecção segura de registros legados `Atendente`, sem promoção automática;
-- equipes/setores responsáveis e responsável individual opcional;
-- preservação da categoria e do local originalmente reportados;
-- correção administrativa justificada de categoria e localização;
-- catálogo administrável de categorias e locais;
-- carga institucional de 60 ambientes do Campus Barra de São Francisco;
-- SLA em horas úteis no timezone `America/Sao_Paulo`;
-- primeira resposta por primeira mudança pública de situação;
-- SLA-base de conclusão por categoria e multiplicadores por prioridade;
-- pausas de SLA em `Aguardando material` e `Aguardando contratação ou serviço externo`;
-- separação entre tempo total aberto e tempo efetivo de SLA;
-- paginação por cursor, com páginas de 25, 50 ou 100 registros;
-- filtros e ordenações administrativas;
-- dashboard operacional enxuto e painel analítico separado;
-- auditoria global exclusiva do Administrador;
-- observações internas com audiência explícita;
-- exportação CSV, XLSX e PDF com limite de segurança;
-- polling administrativo de 60 segundos sem sobrescrita destrutiva;
-- classificação `REAL | TEST` e expurgo físico somente de `TEST` pelo Administrador.
-
-## Arquitetura
+O sistema adota uma arquitetura em camadas com desacoplamento rigoroso entre a camada de apresentação web, serviços de API, persistência de dados e serviços transacionais:
 
 ```text
-React + TypeScript + Vite
-        ↓
-Express API
-        ↓
-Firebase App Check
-        ↓
-Firebase Authentication
-        ↓
-Autorização administrativa server-side
-        ↓
-Services / domínio / repositories
-        ↓
-Firebase Admin SDK
-        ↓
-Cloud Firestore + Cloud Storage
+Cloudflare Pages (Frontend SPA — React 19 / TypeScript / Vite)
+  │
+  ▼ [HTTPS / CORS restrito / App Check]
+Cloud Run (Backend API — Node.js 22 / Express / TypeScript)
+  ├── Autenticação & Autorização:
+  │     ├── Firebase Authentication (Sessões anônimas públicas e Google Sign-In administrativo)
+  │     └── Firebase App Check (Attestation de integridade)
+  ├── Persistência de Dados e Metadados:
+  │     └── Google Cloud Firestore (Banco de dados nomeado: ai-studio-olhosdocampus-63a884f8-f929-40fc-8c6e-326a409c40cf em us-west1)
+  ├── Armazenamento de Fotografias:
+  │     └── Cloudflare R2 (Bucket privado S3-compatible, com stripping de EXIF e re-encoding WebP no backend)
+  ├── Mensageria e Notificações Transacionais:
+  │     ├── Exchange Web Services / EWS NTLMv2 institucional (Provedor primário)
+  │     └── Resend (Provedor alternativo / histórico preservado)
+  └── Rotinas Periódicas de Manutenção:
+        └── Cloudflare Maintenance Worker (Disparo agendado via HMAC para rotas internas de manutenção)
 ```
 
-O cliente Web **não acessa diretamente** Firestore nem Cloud Storage. `firestore.rules` e `storage.rules` permanecem `deny-all` para clientes. Fotografias são recebidas e processadas pelo servidor, reencodadas com remoção de metadados EXIF e armazenadas no Storage por Firebase Admin.
+O cliente web no navegador nunca acessa o Firestore nem os buckets de armazenamento de fotos diretamente. Todas as operações transitam exclusivamente pelo backend Cloud Run, que atua como mediador seguro de regras de negócio, autorização e sanitização. As regras de segurança (`firestore.rules` e `storage.rules`) são configuradas em modo *deny-all*.
 
-## Papéis administrativos
+---
 
-### Gestor
+## 2. Componentes Implantáveis
 
-Administra ocorrências: visualização, filtros, indicadores, exportações, situação, prioridade, correção de categoria/local, equipe, responsável, mensagens públicas, observações internas conforme audiência, duplicidade, resolução/reabertura e fotografias conforme as regras do domínio.
+A release 1.0.0 possui três componentes implantáveis e versionados de forma unificada:
 
-### Administrador
+1. **Cloud Run Backend (`CLOUD_RUN_BACKEND`)**: Serviço containerizado Node.js 22 rodando a API REST Express, executando a lógica de negócio, RBAC, auditoria, outbox de notificações e processamento de fotografias.
+2. **Cloudflare Pages Frontend (`CLOUDFLARE_PAGES_FRONTEND`)**: Single Page Application (SPA) construída com React 19 e Vite, servindo a interface pública para a comunidade acadêmica e o painel administrativo restrito.
+3. **Cloudflare Maintenance Worker (`CLOUDFLARE_MAINTENANCE_WORKER`)**: Worker serverless na borda da Cloudflare responsável pelo agendamento periódico (cron) de chamadas autenticadas via HMAC para os endpoints de manutenção do backend.
 
-Possui todas as capacidades operacionais do Gestor e, adicionalmente, administra usuários, papéis, equipes, categorias, locais, SLA, calendário útil, parâmetros institucionais, auditoria global e expurgo de dados `TEST`.
+---
 
-`Atendente` não é papel ativo. Registros legados são bloqueados até que um Administrador escolha explicitamente entre converter para Gestor ou inativar.
+## 3. Fluxo Público de Ocorrências
 
-## Dados de referência
+- **Registro sem Identificação Pessoal Obrigatória**: Qualquer membro da comunidade acadêmica ou visitante pode registrar problemas de infraestrutura física sem necessidade de login prévio ou fornecimento de dados pessoais (como nome, CPF ou e-mail).
+- **Classificação e Localização**: Seleção orientada por categoria de manutenção e ambiente canônico institucional dentro dos blocos do campus.
+- **Descrição e Fotografias**: Descrição textual da ocorrência e anexo opcional de fotos probatórias da avaria.
+- **Protocolo e Chave de Acompanhamento**: Ao submeter a ocorrência com sucesso, o cidadão recebe imediatamente:
+  - Um **número de protocolo** público sequencial/canônico;
+  - Uma **chave de acompanhamento** única, de uso exclusivo do autor para consultas futuras.
+- **Consulta de Status e Mensagens**: O acompanhamento do andamento da ocorrência e a visualização de respostas ou mensagens públicas da administração são realizados via formulário com protocolo e chave de acompanhamento submetidos fora da URL.
 
-O campus possui uma hierarquia única nesta versão:
+---
 
-- Bloco 01 — 28 ambientes;
-- Bloco 02 — 26 ambientes;
-- Bloco 03 — 2 ambientes;
-- Externo — 4 ambientes;
-- total — **60 ambientes**.
+## 4. Gestão Administrativa e Controle de Acesso (RBAC)
 
-Não são inventados pavimentos. Internamente, a hierarquia mantém um nó técnico `sem-pavimento` com nome vazio para preservar compatibilidade do modelo.
+O acesso ao painel administrativo requer autenticação segura via **Google Sign-In administrativo com restrições institucionais configuradas**. O sistema implementa controle de acesso baseado em papéis (RBAC) com mínimo privilégio:
 
-## SLA institucional inicial
+- **Administrador**: Controle pleno do sistema, gerenciamento de usuários administrativos, equipes operacionais, configurações de e-mail e capacidade, categorias, ambientes e auditoria global.
+- **Gestor**: Triagem e roteamento de ocorrências, priorização, redistribuição entre setores e equipes, e acompanhamento operacional global.
+- **Atendente**: Papel de menor privilégio; acesso restrito estritamente às ocorrências atribuídas individualmente (`assignedToAdminUserId === user.id`), com permissão para adicionar notas internas com visibilidade delimitada, transitar status autorizados e registrar fotos de conclusão/solução.
+- **Equipe CGAO**: A Coordenação Geral de Administração, Orçamento e Finanças atua como equipe inicial canônica de acolhimento e triagem institucional das demandas.
+- **Histórico e Notas Internas**: Registro de auditoria append-only para cada evento de mudança de estado, comentários internos com controle de audiência (`INTERNAL` vs `RESPONSIBLE_TEAM`) e fotos de solução com publicação pública condicionada a aprovação explícita.
 
-Calendário padrão:
+---
 
-- segunda a sexta: 09:00–19:00;
-- sábado e domingo: fechado;
-- timezone: `America/Sao_Paulo`;
-- sem desconto automático de intervalo de almoço.
+## 5. Infraestrutura e Ambientes Físicos
 
-Primeira resposta: Baixa 30h; Normal 20h; Alta 10h; Urgente 4h; Emergencial 2h úteis.
+- **Topologia de Ambientes**: Mapeamento de 60 ambientes institucionais canônicos do IFES — Campus Barra de São Francisco (distribuídos entre Bloco 01: 28 ambientes, Bloco 02: 26 ambientes, Bloco 03: 2 ambientes, e Áreas Externas: 4 ambientes).
+- **Banco de Dados**: Instância nomeada do Google Cloud Firestore:
+  - `FIRESTORE_DATABASE_ID`: `ai-studio-olhosdocampus-63a884f8-f929-40fc-8c6e-326a409c40cf`
+  - `FIRESTORE_LOCATION`: `us-west1`
+  *(Nota de Governança: A localização do Firestore é imutável in-place; a eventual migração para região geográfica mais próxima como São Paulo `southamerica-east1` está documentada como roadmap pós-1.0 através de export/import e cutover planejado).*
+- **Armazenamento de Fotografias (Cloudflare R2)**: Armazenamento produtivo de fotografias em bucket privado compatível com S3. As imagens sofrem stripping completo de metadados EXIF/XMP e re-encoding em WebP antes da persistência. Status de prontidão de backup: `PHOTO_BACKUP_READINESS=PARTIAL` (rehearsals locais aprovados; replicação geográfica/off-site formal compõe o roadmap).
+- **Limitação de Topologia e Rate Limiting**:
+  - `RATE_LIMIT_SCOPE=INSTANCE_LOCAL`: O rate limiter ativo opera localmente na memória do processo backend.
+  - Para garantir a eficácia do rate limiting na topologia atual, o Cloud Run é fixado estritamente em 1 instância máxima (`--max=1` / `--max-instances=1`), assegurado por verificador automatizado (*Scale Guard*).
+  - A eventual ampliação da capacidade através de scale-out horizontal exigirá a implementação prévia de rate limiting distribuído ou na borda (edge).
 
-Multiplicadores do SLA de conclusão: Baixa 1,50; Normal 1,00; Alta 0,80; Urgente 0,60; Emergencial 0,40.
+---
 
-Os SLA-base por categoria e a matriz completa estão em `docs/SLA_0.6.0.md`.
+## 6. Rotinas de Manutenção e Snapshots Técnicos
 
-## Requisitos locais
+- O Cloudflare Maintenance Worker dispara chamadas periódicas assinadas por HMAC para rotas internas de manutenção no backend. O processamento do snapshot de infraestrutura ocorre no backend.
+- O Worker não realiza processamento local de banco de dados; sua atribuição é exclusivamente atuar como disparador confiável e autenticado de cron na borda.
+- As chamadas distinguem rotas de alta frequência (drenagem do outbox de notificações) e rotas diárias de agregação técnica (snapshots de infraestrutura e capacidade para o painel administrativo).
 
-- Node.js compatível com as dependências travadas no `package-lock.json`;
-- npm 10+;
-- Java/JRE quando forem utilizados Firebase Emulators por meio do Firebase CLI;
-- projeto Firebase configurado por variáveis de ambiente/ADC no servidor;
-- nenhuma conta de serviço, token ou chave privada deve ser incluída no repositório.
+---
 
-> Observação de ambiente da construção desta entrega: Node 22.16.0 gerou avisos de engine para dependências de desenvolvimento recentes (`jsdom` e `undici`). Consulte `docs/TESTES_0.6.0.md` para o resultado efetivamente observado.
+## 7. Chave de Acompanhamento (Tracking Key)
 
-## Instalação
+- A chave de acompanhamento é composta por 12 caracteres aleatórios distribuídos em três quartetos (`XXXX-XXXX-XXXX`), gerada por CSPRNG (`randomInt`) sobre um alfabeto de 32 símbolos alfanuméricos legíveis (`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`), evitando caracteres ambíguos.
+- Apresenta aproximadamente 60 bits de entropia teórica (32^12 = 2^60).
+- A chave em texto claro é exibida uma única vez ao usuário no momento da criação da ocorrência e **não é armazenada em texto claro no banco de dados**. O backend persiste apenas o hash derivado por `scrypt` com salt criptográfico individual de 16 bytes.
+
+---
+
+## 8. Acessibilidade e Experiência do Usuário
+
+A aplicação passou por homologação pós-fix de acessibilidade nos fluxos e critérios auditados, incluindo navegação por teclado, gerenciamento de foco, semântica de formulários, modais e reflow responsivo. Essa homologação não constitui declaração de conformidade global WCAG.
+
+---
+
+## 9. Operações e Ciclo de Desenvolvimento
+
+### Requisitos de Ambiente Local
+
+- **Node.js**: `>=22.22.2 <23` (homologado na versão `v22.23.2`)
+- **npm**: `>=10.0.0` (homologado na versão `10.9.8`)
+- **Java**: OpenJDK 21 LTS (necessário para execução local do Firebase Emulator Suite)
+
+### Instalação
 
 ```bash
+# Instalação estrita e determinística das dependências
 npm ci
 ```
 
-Copie `.env.example` para a configuração segura do ambiente de execução sem versionar o arquivo real. Em produção, use identidade de runtime/ADC para Firebase Admin; não grave credenciais no código.
-
-## Desenvolvimento
+### Pipelines de Qualidade e Verificação
 
 ```bash
-npm run dev
-```
-
-## Build
-
-```bash
-npm run build
-npm start
-```
-
-## Validação
-
-```bash
+# Checagem estática de tipos TypeScript
 npm run typecheck
+
+# Análise de linting (ESLint com zero tolerância a avisos)
 npm run lint
+
+# Execução da suíte principal de testes automatizados (Vitest)
 npm run test
+
+# Build de produção do cliente (Vite) e do servidor (esbuild)
 npm run build
+
+# Validação integrada (typecheck + lint + test + build)
 npm run validate
-npm audit --omit=dev
+
+# Checagem de tipos do Cloudflare Maintenance Worker
+npm run worker:typecheck
+
+# Testes automatizados do Cloudflare Maintenance Worker
+npm run worker:test
+
+# Testes de regras de segurança no Firebase Emulator (Firestore e Storage)
 npm run test:rules
+
+# Testes de integração Firebase no Emulator
 npm run test:firebase
+
+# Testes de integração de Storage no Emulator
 npm run test:storage
+
+# Verificação formal de conformidade da release 1.0.0 (11 truth points)
+npm run verify:release
+
+# Verificação da invariante de segurança de escala (Scale Guard)
+npm run check:scale
 ```
 
-Resultados somente são considerados aprovados quando o comando foi realmente executado. O relatório desta entrega está em `docs/TESTES_0.6.0.md`.
+---
 
-## Seed institucional
+## 10. Segurança e Responsabilidade Operacional
 
-O seed de ambientes é dry-run por padrão:
-
-```bash
-npm run firebase:seed-campus-spaces -- --dry-run
-```
-
-Para aplicar no Emulator Suite ou ambiente autorizado:
-
-```bash
-npm run firebase:seed-campus-spaces -- --apply
-```
-
-Fora dos emuladores existe trava adicional por variável de confirmação, documentada em `docs/LOCAIS_E_CORRECAO_DE_LOCAL.md`. O seed é aditivo/idempotente: cria ausências conhecidas e não renomeia nem remove silenciosamente locais já administrados.
-
-O seed geral de referências também inclui categorias, configuração operacional, SLA e calendário:
-
-```bash
-npm run firebase:seed-reference-data
-```
-
-## Migração 0.6.0
-
-A migração é explícita e dry-run por padrão:
-
-```bash
-npm run firebase:migrate-0.6 -- --dry-run
-```
-
-Depois de backup, conferência do projeto e revisão do relatório:
-
-```bash
-npm run firebase:migrate-0.6 -- --apply
-```
-
-A migração:
-
-- não promove `Atendente` automaticamente;
-- não transforma `department` em equipe automaticamente;
-- preserva eventos e fotografias;
-- preenche `reportedCategory*` e `reportedLocation` a partir do estado existente quando não houver valor anterior recuperável;
-- classifica registros legados como `REAL`, salvo marcação `TEST` já explícita;
-- tenta reconstruir SLA a partir de timestamps/eventos existentes;
-- marca reconstruções como `CALCULATED`, `ESTIMATED` ou `UNAVAILABLE` quando necessário.
-
-Consulte `docs/MIGRACAO_0.5.1_PARA_0.6.0.md`.
-
-## Consulta pública e segurança
-
-A consulta exige **protocolo + chave de acompanhamento**. A chave não é enviada na URL e não é armazenada em texto puro; o servidor armazena somente derivação com salt. A consulta pública não expõe observações internas, autores administrativos, identificadores de segurança, paths de Storage ou dados técnicos desnecessários.
-
-## Fotografias
-
-- fotografias iniciais permanecem internas;
-- fotografias de solução podem ser publicadas conforme regra administrativa;
-- processamento ocorre no servidor;
-- EXIF/XMP são removidos por reencodificação;
-- o cliente Web não acessa o bucket diretamente.
-
-## Documentação ativa da 0.6.2
-
-- `docs/ARQUITETURA.md`
-- `docs/ARVORE_DIRETORIOS.md`
-- `docs/MATRIZ_DE_PERMISSOES_0.6.0.md`
-- `docs/SLA_0.6.0.md`
-- `docs/CALENDARIO_DE_ATENDIMENTO.md`
-- `docs/EQUIPES_RESPONSAVEIS.md`
-- `docs/CATEGORIAS_E_RECLASSIFICACAO.md`
-- `docs/LOCAIS_E_CORRECAO_DE_LOCAL.md`
-- `docs/PAINEL_ADMINISTRATIVO_0.6.0.md`
-- `docs/INDICADORES_0.6.0.md`
-- `docs/EXPORTACOES_0.6.0.md`
-- `docs/AUDITORIA_OPERACIONAL_0.6.0.md`
-- `docs/MIGRACAO_0.5.1_PARA_0.6.0.md`
-- `docs/RELATORIO_IMPLEMENTACAO_0.6.0.md`
-- `docs/TESTES_0.6.0.md`
-- `docs/INSPECAO_ZIP_FINAL_0.6.0.md`
-- `docs/RELATORIO_IMPLEMENTACAO_0.6.1.md`
-- `docs/TESTES_0.6.1.md`
-- `docs/PUBLICACAO_AI_STUDIO_0.6.1.md`
-- `docs/INSPECAO_ZIP_FINAL_0.6.1.md`
-- `docs/ARQUIVOS_0.6.1.md`
-- `docs/RELATORIO_IMPLEMENTACAO_0.6.2.md`
-- `docs/TESTES_0.6.2.md`
-- `docs/INSPECAO_ZIP_FINAL_0.6.2.md`
-- `docs/ARQUIVOS_0.6.2.md`
-
-Documentos numerados de versões anteriores são mantidos apenas como histórico e não definem o comportamento ativo da 0.6.2, salvo quando referenciados como documentação funcional preservada da 0.6.0.
-
-## Fora do escopo da 0.6.0
-
-Não há envio real de e-mail, SMTP, Trigger Email, Cloud Functions de notificação, ações em lote, múltiplos campi, SSE/WebSocket ou BI externo. A versão 0.7.0 permanece reservada principalmente à arquitetura de notificações reais por e-mail, outbox, idempotência, retentativas e auditoria de envio.
+- **Princípio da Transparência**: O sistema não alega "anonimato absoluto" ou "segurança incondicional". O fluxo público oferece registro sem identificação pessoal obrigatória, garantindo privacidade nos metadados de domínio sob responsabilidade do software.
+- **Sanitização de Mídia**: Todas as imagens enviadas passam por validação de formato e tamanho, re-encoding forçado para formato WebP e expurgo determinístico de metadados EXIF e XMP.
+- **Comunicação por E-mail**: E-mails de notificação institucional não contêm chaves de acompanhamento, hashes, descrições detalhadas da ocorrência, anexos fotográficos ou endereços IP.
+- **Ausência de Credenciais em Código**: O repositório não contém segredos, chaves privadas ou senhas hardcoded. Todas as configurações confidenciais são providas via variáveis de ambiente seguras (`.env.example` serve como referência não confidencial).

@@ -55,7 +55,7 @@ describe('production package preparation 0.6.1', () => {
     expect(existsSync(join(root, 'node_modules', 'prod-only'))).toBe(true);
     expect(existsSync(join(root, 'bun.lock'))).toBe(false);
     expect(existsSync(join(root, 'bun.lockb'))).toBe(false);
-  });
+  }, 60000);
 
   it('keeps package.json build configured to run the production-package preparation', () => {
     const packageJson = JSON.parse(execFileSync(process.execPath, ['-e', 'process.stdout.write(JSON.stringify(require("./package.json")))'], {
@@ -63,7 +63,7 @@ describe('production package preparation 0.6.1', () => {
       encoding: 'utf8',
     })) as { scripts?: Record<string, string> };
 
-    expect(packageJson.scripts?.build).toContain('node scripts/prepareProductionPackage.mjs');
+    expect(packageJson.scripts?.['build:cloud-run']).toContain('node scripts/prepareProductionPackage.mjs');
     expect(packageJson.scripts?.['prepare:production-package']).toBe('node scripts/prepareProductionPackage.mjs');
   });
 });

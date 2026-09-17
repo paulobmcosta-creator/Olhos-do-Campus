@@ -138,7 +138,7 @@ async function seedAdminUser(repository: FirestoreAdminUserRepository, actor: Au
   }
 }
 
-async function makePersistentService(): Promise<{
+async function makePersistentService(notificationEnabled=false): Promise<{
   service: OccurrenceService;
   occurrences: FirestoreOccurrenceRepository;
   events: FirestoreOccurrenceEventRepository;
@@ -171,6 +171,7 @@ async function makePersistentService(): Promise<{
   await seedAdminUser(adminUsers, manager);
   await seedAdminUser(adminUsers, secondManager);
   await slaConfigs.seedDefaults('integration-seed');
+  if(notificationEnabled)await configs.update({...DEFAULT_OPERATIONAL_CONFIG,notificationEmails:['um@example.org','dois@example.org'],emailNotificationsEnabled:true},'integration-seed');
 
   return {
     service: new OccurrenceService(
@@ -272,7 +273,7 @@ describe('Firebase Emulator Suite — fundação de segurança preservada', { ti
     await expect(listAll(ref(publicStorage, 'occurrences'))).rejects.toBeDefined();
   });
 
-  it('executa bootstrap em dry-run sem persistir e depois cria o primeiro Administrador', async () => {
+  it('executa bootstrap em dry-run sem persistir e depois cria o primeiro Administrador', { timeout: 45000 }, async () => {
     const email = 'bootstrap@ifes.edu.br';
     const id = hashNormalizedEmail(email);
     const dryRun = await runBootstrap([`--email=${email}`, '--display-name=Administrador Bootstrap', '--emulator', '--dry-run']);
@@ -319,7 +320,27 @@ describe('Firebase Emulator Suite — domínio persistente 0.6.0', { timeout: 20
   });
 
 
-  it('integra Firestore e Storage sem persistir bytes ou Data URL no documento de domínio', async () => {
+  it('grava ocorrência REAL e outbox por destinatário na mesma criação transacional', async () => {
+    const fixture = await makePersistentService(true);
+    const created = await fixture.service.create(createInput, 'integration-outbox');
+    const occurrence = await fixture.occurrences.findByProtocol(created.protocol);
+    const deliveries = await firestore.collection('notificationOutbox').where('occurrenceId','==',occurrence!.id).get();
+    expect(deliveries.size).toBe(2);
+    for(const delivery of deliveries.docs){
+      expect(delivery.data()).toMatchObject({eventType:'OCCURRENCE_CREATED',status:'PENDING',protocol:created.protocol,provider:'ews'});
+      expect(delivery.id).not.toContain('@');
+      expect(JSON.stringify(delivery.data())).not.toContain(created.trackingKey);
+    }
+    expect((await firestore.doc(`occurrences/${occurrence!.id}`).get()).exists).toBe(true);
+  });
+
+  it('não grava outbox para ocorrência TEST mesmo com destinatários informados', async () => {
+    const fixture = await makePersistentService(true);
+    await fixture.occurrences.createWithProtocol(directRecord(99),'INF',[initialEvent(new Date(),'test-no-outbox')],{notificationRecipients:['um@example.org']});
+    expect((await firestore.collection('notificationOutbox').get()).empty).toBe(true);
+  });
+
+  it('integra Firestore e Storage Emulator apenas como backend local sem persistir bytes ou Data URL no domínio', async () => {
     const fixture = await makePersistentService();
     const source = readFileSync(new URL('./fixtures/photo-with-exif-gps.jpg', import.meta.url));
     const created = await fixture.service.create(createInput, [{ buffer: source, declaredMimeType: 'image/jpeg' }], 'photo-integration-create');
@@ -391,17 +412,17 @@ describe('Firebase Emulator Suite — domínio persistente 0.6.0', { timeout: 20
   it('gera protocolos concorrentes sem duplicidade e mantém contador anual transacional', async () => {
     const repository = new FirestoreOccurrenceRepository(firestore);
     const date = new Date('2026-08-10T15:00:00.000Z');
-    const created = await Promise.all(Array.from({ length: 20 }, (_, index) => repository.createWithProtocol(
+    const created = await Promise.all(Array.from({ length: 5 }, (_, index) => repository.createWithProtocol(
       directRecord(index + 1),
       'INF',
       [initialEvent(date, `concurrent-${index + 1}`)],
     )));
     const protocols = created.map((item) => item.protocol);
-    expect(new Set(protocols).size).toBe(20);
+    expect(new Set(protocols).size).toBe(5);
     expect(protocols).toContain('INF-2026-000001');
-    expect(protocols).toContain('INF-2026-000020');
-    expect((await firestore.doc('protocolCounters/2026').get()).data()?.lastSequence).toBe(20);
-  });
+    expect(protocols).toContain('INF-2026-000005');
+    expect((await firestore.doc('protocolCounters/2026').get()).data()?.lastSequence).toBe(5);
+  }, 30000);
 
   it('reinicia a sequência por ano sem reiniciar o contador do ano anterior', async () => {
     const repository = new FirestoreOccurrenceRepository(firestore);

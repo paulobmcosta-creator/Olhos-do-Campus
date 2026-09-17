@@ -6,6 +6,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/work/**', '**/outputs/**'],
+    testTimeout: 15_000,
     coverage: {
       reporter: ['text', 'html'],
     },

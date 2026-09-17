@@ -1,5 +1,192 @@
 # Changelog
 
+
+## [1.0.0] - 2026-09-15
+
+### Promoção Formal e Alinhamento de Release
+- **Promoção da Árvore Estável:** Elevação formal da árvore homologada do Ciclo 0.9.0 para a versão candidata canônica 1.0.0.
+- **Sincronização de Identidade de Release:** Unificação estrita da versão `1.0.0` nos manifestos de pacote raiz (`package.json`, `package-lock.json`), configuração de runtime (`src/config/version.ts`), metadados institucionais (`metadata.json`, `firebase-blueprint.json`), tags de container de build (`cloudbuild.yaml`) e scripts de implantação canônica (`scripts/deployCloudRun.sh` com `CONFIRM_DEPLOY_1_0`).
+- **Configuração e Alinhamento do Maintenance Worker:** Correção da versão de runtime do Cloudflare Maintenance Worker em `infra/cloudflare/maintenance-worker/src/index.ts` de `0.7.7` para `1.0.0`, sincronização do manifesto de dependências e configuração do `BACKEND_URL` canônico em `wrangler.jsonc` (`https://olhos-do-campus-hnwfymhsqq-uw.a.run.app`). Reconhecimento formal do estado pré-1.0 como `WORKER_ABSENT`, caracterizando o deploy futuro como `WORKER_DEPLOYMENT_TYPE=FIRST_TIME_PROVISIONING`.
+- **Endurecimento do Verificador de Conformidade (`verifyRelease.mjs`):** Expansão do verificador de release para 13 truth points automatizados, incorporando a verificação estrita da versão emitida pelo endpoint de health do Maintenance Worker, do projeto de deploy do Cloud Run e do `vars.BACKEND_URL` do Worker contra placeholders ou URLs inválidas.
+- **Suíte de Teste de Runtime e Configuração do Worker:** Ampliação dos testes automatizados com `WORKER_RUNTIME_VERSION_TEST` (health reporta status `ok`, componente `maintenance-worker` e versão `1.0.0`), `WORKER_CONFIG_CRONS_TEST` (validação estrita dos agendamentos `*/10 * * * *` e `15 3 * * *`) e `WORKER_CONFIG_NAME_TEST` (validação do nome `olhos-do-campus-maintenance`).
+- **Revisão Documental Substantiva:** Reescrita completa do `README.md` refletindo a arquitetura em 3 componentes implantáveis, topologia com Firestore nomeado em `us-west1`, R2 privado, autenticação administrativa via Google Sign-In, rate limiting local associado à invariante de instância única e declaração formal de acessibilidade no escopo homologado.
+- **Invariantes de Escopo Preservadas:** Nenhuma alteração funcional de negócio, nenhuma mudança de esquema ou modelo de dados, nenhuma migração adicional de banco de dados (`MIGRATION_080_ALREADY_APPLIED=YES`, `MIGRATION_080_REEXECUTION_FOR_1_0=NO`) e nenhuma alteração no grafo de dependências externas (`DEPENDENCY_GRAPH_CHANGED_BY_VERSION_SYNC=NO`).
+
+## [0.9.0] - 2026-09-15
+
+### Ciclo de Homologação, Observabilidade, Operações e Prontidão de Produção
+- **Hardening de Segurança e Governança (Gate G.1):** Centralização de logs estruturados com redação de dados sensíveis e propagação de `X-Request-Id`; padronização do vocabulário institucional de privacidade ("registro sem identificação pessoal obrigatória").
+- **Controle de Acesso RBAC e Menor Privilégio (Gate G.2):** Consolidação do papel `Atendente` e matriz de transições autorizadas com restrição de escopo a ocorrências atribuídas individualmente.
+- **Fluxos Funcionais e Roteamento (Gate G.3):** Estabilização da triagem pela CGAO e fluxo completo de acolhimento, resposta e encerramento de ocorrências.
+- **Acessibilidade e Usabilidade (Gate G.4):** Homologação pós-fix de acessibilidade nos formulários públicos e administrativos, navegação por teclado e semântica de modais.
+- **Responsividade e Reflow UX (Gate G.5):** Otimização para múltiplos viewports (mobile, tablet, desktop) e validação responsiva dos painéis operacionais.
+- **Operações, Observabilidade e Backup/Restore (Gate G.6 / G.6C / G.6C3):** Implementação de scripts seguros de backup e restore para Firestore e Cloudflare R2 com suporte a dry-run e rehearsals automatizados; implementação do *Scale Guard* (`checkScaleConfig.mjs`) para proteção da invariante `max-instances=1` atrelada a `RATE_LIMIT_SCOPE=INSTANCE_LOCAL`; ADR documentando a imutabilidade in-place do Firestore.
+- **Regressão Integral e Homologação Técnica (Gate 0.9-H):** Execução integral das suítes de testes automatizados (unitários, integração, regras Firebase e emuladores), validação de tipos e lint com 100% de aprovação técnica.
+- **Homologação Visual e Smoke de Interface (Gate 0.9-I):** Verificação de renderização, contraste e fluxos de tela em ambiente controlado.
+- **Production Readiness e Implantação Controlada (Gate 0.9-J / J.1):** Implantação e corte de tráfego em produção no Cloud Run e Cloudflare Pages; execução de testes de fumaça (smoke) em produção; saneamento de credenciais e estabilização operacional com remediação imediata de permissões temporárias de IAM.
+
+## [0.8.0] - 2026-08-28
+
+### Adicionado
+- **Papel Institucional de Atendente (Menor Privilégio):** Implementação formal do papel `Atendente` com 29 operações autorizadas restritas estritamente às ocorrências atribuídas individualmente (`assignedToAdminUserId === user.id`).
+- **Visão "Minhas Ocorrências":** Listagem e contagem de ocorrências filtradas por atribuição individual para o Atendente; páginas globais e dados transversais permanecem inacessíveis.
+- **Sete Transições de Status Autorizadas para Atendente:** Suporte operacional para transições `Em análise` $\rightarrow$ `Em atendimento`, `Encaminhada ao setor responsável` $\rightarrow$ `Em atendimento`, `Em atendimento` $\leftrightarrow$ `Aguardando material`, `Em atendimento` $\leftrightarrow$ `Aguardando contratação ou serviço externo`, e `Em atendimento` $\rightarrow$ `Resolvida`.
+- **Audiência Restrita de Notas Internas (`RESPONSIBLE_TEAM`):** Atendentes visualizam exclusivamente notas com audiência de equipe responsável em ocorrências atribuídas a si próprios.
+- **Equipe Inicial de Triagem e Acolhimento CGAO:** Criação da equipe institucional `team-cgao` (Coordenação Geral de Administração, Orçamento e Finanças), com notificação inicial automática para `cgao.bsf@ifes.edu.br`.
+- **Notificações Institucionais de Roteamento:** Eventos `OCCURRENCE_TEAM_ROUTED` (encaminhamento para setor) e `OCCURRENCE_RESPONSIBLE_ASSIGNED` (atribuição para responsável individual) integrados ao outbox transacional.
+- **Exclusão Segura e Reativação de Locais:** Verificação de histórico de ocorrências (`location` e `reportedLocation`) antes da exclusão física, retornando HTTP 409 com mensagem institucional quando o local já foi utilizado, e suporte a reativação de ambientes/blocos inativos.
+- **60 Ambientes Institucionais Canônicos:** Reorganização e saneamento dos ambientes do Campus Barra de São Francisco (Bloco 01: 28, Bloco 02: 26, Bloco 03: 2, Externo: 4), sem pavimentos artificiais.
+- **Scripts Operacionais e de Migração:** Scripts `scripts/migrate080.ts` (reconciliação de equipes e ativação da CGAO com suporte a `--dry-run` e `--apply`) e `scripts/cleanupArtificialLocations.ts` (conciliação de ambientes por allowlist com `--dry-run` e `--apply`).
+- **Suítes de Testes 0.8.0:** Inclusão de `tests/attendantRole080.test.ts`, `tests/locationManagement080.test.ts`, `tests/teamRoutingNotifications080.test.ts`, `tests/migrate080.test.ts` e `tests/cleanupArtificialLocations.test.ts`.
+
+### Corrigido
+- **Filtragem de Locais Inativos no Portal Público:** O catálogo público de ambientes e blocos (`listActiveForPublic()`) omite estritamente locais inativos e blocos sem ambientes ativos, tanto no carregamento inicial quanto em novas sessões.
+- **GD-F001 (Serialização de `templateData.teamName` no Outbox):** Correção da construção de `templateData` em `createResponsibleAssignedNotificationItem` para omitir chaves opcionais `undefined`, sanando erro fatal de serialização no Firestore Admin SDK sem habilitar `ignoreUndefinedProperties` globalmente.
+- **Idempotência de Notificações em Mutações Recorrentes:** Chaves de idempotência incorporam versão do evento e identificadores de destino, diferenciando reatribuições sucessivas legítimas de retries acidentais.
+
+## [0.7.7] - 2026-08-25
+
+### Corrigido
+- **Framing HTTP do NTLM Type 3 no EWS:** a requisição autenticada agora envia `Content-Length` calculado em bytes para corpos `string` ou `Buffer`, evitando que o Node utilize `Transfer-Encoding: chunked` no POST SOAP.
+- **Sanitização de headers de transporte:** `Content-Length` fornecido externamente é substituído pelo comprimento real e `Transfer-Encoding` é removido na etapa autenticada para impedir framing ambíguo.
+- **Regressão coberta por teste:** nova suíte `tests/ntlmHttpFraming077.test.ts` cobre UTF-8, `Buffer`, sobrescrita de comprimento incorreto, remoção case-insensitive de `Transfer-Encoding` e requisições sem corpo.
+
+### Evidência operacional que motivou a correção
+- A candidata 0.7.6 foi bloqueada no gate EWS real com `EWS_EMPTY_RESPONSE`.
+- O diagnóstico read-only `GetFolder` retornou `400 Bad Request` sem corpo com a implementação original e `200 OK`, `ResponseClass=Success`, `ResponseCode=NoError` quando o mesmo Type 3 foi enviado com `Content-Length` explícito.
+- Nenhum build/deploy da 0.7.6 bloqueada foi promovido para tráfego produtivo.
+
+### Validação operacional da 0.7.7
+- Node `v22.22.2` / npm `10.9.7`; `npm ci` concluído com 0 vulnerabilidades.
+- TypeScript, lint, suíte principal (390 testes), Maintenance Worker e build local de produção aprovados.
+- `GetFolder` read-only pela implementação corrigida retornou HTTP 200, `ResponseClass=Success` e `ResponseCode=NoError` sem workaround externo.
+- Teste EWS real opt-in aprovado com 2/2 testes, incluindo `CreateItem` com `SendAndSaveCopy`.
+- Recebimento humano confirmado para a mensagem de integração 0.7.7 enviada por `cgao.bsf@ifes.edu.br`.
+
+## [0.7.6] - 2026-08-20
+
+### EWS produtivo, preservação da semântica de notificações e correções operacionais
+
+- **Provedor EWS institucional:** implementado `EwsEmailProvider` nativo para Exchange Web Services do IFES (`https://webmail.ifes.edu.br/EWS/Exchange.asmx`, domínio `UPD1`), utilizando autenticação NTLM/NTLMv2 pura sem dependências externas obsoletas ou vulneráveis.
+- **Envelope SOAP CreateItem:** suporte a `SendAndSaveCopy`, `DistinguishedFolderId Id="sentitems"`, sanitização estrita de XML (`escapeXml`) e proteção contra XXE.
+- **Generalização de EmailProvider:** suporte arquitetural aos provedores `ews` e `resend` com vinculação determinística por notificação (`item.provider`) e ausência de fallback automático silencioso (falhas de configuração são explícitas).
+- **Semântica e Invariantes de Notificação:** preservação de `SAME_ATTEMPT`, `NEW_ATTEMPT`, `UNCERTAIN` e `DELIVERY_UNCERTAIN`. O sistema não fabrica `providerMessageId` fictício quando o EWS opera em `SendAndSaveCopy`.
+- **Desacoplamento do Artifact Registry:** o script `scripts/artifactRegistrySnapshot.ts` foi desacoplado de `SERVER_ENV`, eliminando a dependência indevida de variáveis do Cloudflare R2 para execução de rotinas de snapshot.
+- **Parser defensivo de bytes:** implementado `server/utils/artifactRegistryParser.ts`, garantindo validação de tamanho de imagens e fail-fast preventivo (rejeitando `bytes: 0` espúrio quando imagens estiverem presentes sem campo de tamanho).
+- **Interface e Painel Administrativo:** atualização dos modelos, schemas Zod e painéis frontend (`NotificationSettingsPanel` e `AdminInfrastructurePage`) para refletir dinamicamente o provedor de e-mail ativo.
+- **Suíte de Testes 0.7.6:** inclusão de testes unitários para parsing SOAP (`tests/ewsSoap.test.ts`), matriz completa de erros EWS (`tests/ewsEmailProvider.test.ts`), vinculação determinística de provedores (`tests/notificationProviderBinding076.test.ts`), parser do Artifact Registry (`tests/artifactRegistrySnapshot076.test.ts`) e teste opt-in com Exchange real (`tests/ewsIntegration.optIn.test.ts`).
+- **Procedimento de Homologação e Promoção de Tráfego:** documentada a estratégia de implantação com `--no-traffic` e traffic tag determinística `--tag=ews076` para validação isolada do gate operacional EWS na URL da tag, substituição de `--to-latest` por promoção explícita `--to-tags=ews076=100` e roteiro de rollback imediato via `--to-revisions`. Nenhuma alteração de código funcional foi realizada nesta etapa.
+
+## [0.7.5] - 2026-08-19
+
+### Fechamento pós-homologação e Firestore Enterprise
+
+- **Fonte de verdade:** consolidada a árvore `0.7.4-pos-homologacao`, já contendo as correções descobertas durante typecheck e Vitest no Cloud Shell.
+- **Contrato HTTP:** formalizados os códigos `WEBHOOK_ATTEMPT_ID_INVALID` e `WEBHOOK_ATTEMPT_WITHOUT_NOTIFICATION` no modelo compartilhado e no parser do cliente.
+- **Correlação Resend:** preservada a correção que impede `notification_id` e `providerMessageId` conflitantes de atualizarem silenciosamente a entrega errada, tanto no repositório Firestore quanto no in-memory.
+- **Teste de Blob:** a validação de resposta protegida WebP verifica o contrato observável (`type` e `size`) sem depender de `instanceof Blob` entre realms Node/jsdom.
+- **Firestore Enterprise:** removidos `fieldOverrides` incompatíveis e materializados seis índices DENSE de collection group `attempts` para `providerMessageId`, `providerAcceptedAt` asc/desc, `createdAt`, `status` e `attemptNumber`.
+- **Regressão de infraestrutura:** adicionados testes específicos que impedem a reintrodução de `fieldOverrides` e validam a presença dos seis índices Enterprise.
+- **Validação real:** Node 22.22.2, typecheck, lint, suíte principal, Worker, build, audits e Emulator Suite passaram no Cloud Shell; regras Firestore/Storage foram publicadas no projeto real.
+- **Índices reais:** os seis índices `attempts` foram aceitos pelo Firestore Enterprise e observados em estado `CREATING`; a evidência fornecida não registrou ainda a transição dos seis para `READY`.
+
+## [0.7.4] - 2026-08-19
+
+### Correção cirúrgica pré-homologação — retry técnico Resend
+
+- **Retry técnico vs. nova tentativa:** introduzida distinção explícita entre `SAME_ATTEMPT` e `NEW_ATTEMPT`; a repetição técnica preserva `attemptId`, `attemptNumber`, `attemptCount` e idempotency key.
+- **`concurrent_idempotent_requests`:** o erro do Resend passa a agendar backoff da mesma DeliveryAttempt, sem criar A2/K2 prematuramente.
+- **Erros ambíguos:** 5xx/408/status 0 estruturados pelo provider usam retry técnico dentro da janela segura de idempotência; exceções de transporte sem resposta conclusiva continuam em `UNCERTAIN`/`DELIVERY_UNCERTAIN`.
+- **Quota/rate limit:** chamadas explicitamente rejeitadas pelo provider ficam diferidas na mesma tentativa, evitando inflação de `attemptCount`; retries técnicos têm limite próprio e backoff persistido.
+- **Limite seguro:** `technicalRetryCount` é independente de `attemptCount`; exceder quatro retries técnicos ou a janela segura leva a tentativa a `UNCERTAIN`, sem criar nova tentativa automaticamente.
+- **Webhooks:** confirmação externa durante o backoff cancela o retry técnico e mantém a máquina de estados monotônica.
+- **Consumo:** chamadas HTTP técnicas da mesma DeliveryAttempt não criam novas unidades; somente tentativas distintas efetivamente aceitas pelo provider são contabilizadas separadamente.
+- **Preservação:** sem dependências novas, serviços novos ou alterações em R2, Artifact Registry cleanup, Pages/Cloud Run, regras de acesso ou baseline Node.
+- **Testes:** adicionada cobertura específica para same-attempt retry, 5xx, timeout, quota, nova tentativa confirmada, contadores, concorrência, webhook durante backoff, idempotency key e consumo.
+
+## [0.7.3] - 2026-08-18
+
+### Correção final pré-homologação — delivery attempts
+
+- **Delivery attempts:** `notificationOutbox/{notificationId}` permanece como intenção lógica e cada chamada externa passa a ser materializada antes do envio em `attempts/{attemptId}`, com identidade, número, status, idempotency key e histórico próprios.
+- **Tags Resend:** cada envio inclui `notification_id` e `attempt_id`; a sintaxe do Resend continua encapsulada no provider e nenhum identificador técnico contém PII, protocolo, tracking key ou conteúdo da ocorrência.
+- **Correlação attempt-aware:** webhooks priorizam `notification_id + attempt_id`, depois `providerMessageId → attempt`, preservando fallback para mensagens 0.7.2 sem `attempt_id` e `providerMessageId` legado na outbox.
+- **Retry sem falso conflito:** P1 da tentativa A1 não é comparado contra P2 da A2. Um webhook rápido de A2 pode estabelecer P2 diretamente na tentativa ainda `PROCESSING`; divergência dentro da mesma tentativa continua sendo conflito real.
+- **Concorrência:** criação/numeração da nova tentativa ocorre dentro do claim transacional; recuperação técnica da mesma lease reutiliza a mesma tentativa/idempotency key, e writes tardios não rebaixam estados confirmados por webhook.
+- **Entrega incerta:** exceção de transporte sem resposta conclusiva mantém a tentativa corrente `UNCERTAIN`, sem presumir aceite nem criar retry automático; confirmação posterior por webhook resolve a tentativa e a outbox.
+- **Estado agregado:** somente a tentativa corrente altera o estado agregado da outbox; webhooks tardios de tentativas anteriores atualizam o histórico da própria tentativa sem rebaixar uma entrega posterior já confirmada.
+- **Consumo Resend:** a referência diária/mensal passa a contar tentativas individualmente aceitas pelo provedor. A1 aceita + A2 aceita = duas unidades; delivery/replay não incrementam novamente. Aceites legados 0.7.2 continuam contabilizados durante a compatibilidade lazy.
+- **Compatibilidade 0.7.2:** documentos sem subcoleção de attempts continuam legíveis; ao ocorrer retry em documento legado com aceite conhecido, a última tentativa histórica conhecida é materializada de forma lazy, sem migração destrutiva.
+- **Índices:** adicionados somente os índices de collection group `attempts` e de compatibilidade `schemaVersion + providerAcceptedAt` realmente usados por correlação e métricas.
+- **Testes:** adicionada suíte 0.7.3 para primeira/segunda tentativa, webhook rápido A2, webhook tardio A1, conflitos reais, fallback legado, idempotência por tentativa, concorrência, consumo por tentativa, resultado externo incerto e materialização lazy 0.7.2.
+
+## [0.7.2] - 2026-08-18
+
+### Correção residual pré-implantação
+
+- **Correlação Resend:** cada envio passa o ID lógico determinístico da outbox ao provider; o Resend o materializa somente como tag técnica `notification_id`, sem e-mail, protocolo, chave, descrição ou outro dado pessoal.
+- **Webhooks:** correlação passa a priorizar `notification_id` e mantém fallback por `providerMessageId` para mensagens anteriores/transicionais. Evidências conflitantes geram `INCONSISTENT` e não atualizam silenciosamente outra entrega.
+- **Unmatched:** webhook válido sem correlação não é mais descartado; o mesmo documento do evento permanece `UNMATCHED_PENDING`, com `attemptCount`, `nextAttemptAt`, backoff limitado, expiração controlada e retenção técnica.
+- **Manutenção:** o endpoint já usado pelo Maintenance Worker processa a outbox e reconcilia webhooks pendentes em lotes, sem conceder ao Worker acesso direto ao Firestore e sem introduzir novo serviço.
+- **Concorrência:** webhook correlacionado pode resolver `DELIVERY_UNCERTAIN`; `markSent` e `markDeliveryUncertain` tardios continuam condicionados à lease `PROCESSING` e não rebaixam estados confirmados.
+- **Consumo Resend:** referências e indicadores passam a contar uma unidade lógica por outbox com `providerAcceptedAt`, sem dupla contagem quando também existe `sentAt`; aceites e entregas são exibidos separadamente.
+- **Observabilidade:** painel administrativo mostra webhooks não correlacionados pendentes e alerta quando o mais antigo ultrapassa o limiar operacional.
+- **Artifact Registry:** o painel passa a descrever o valor observado como estimativa/soma lógica aproximada das imagens, explicitando que camadas compartilhadas podem fazer o valor divergir do armazenamento faturado.
+- **Índices:** adicionados somente os índices de `notificationWebhookEvents` necessários para reconciliação, observação do evento pendente mais antigo e retenção terminal.
+- **Testes:** adicionada cobertura específica para tag, correlação direta/fallback/conflito, corridas webhook × persistência, unmatched/reconciliação/expiração, resolução de `DELIVERY_UNCERTAIN`, consumo lógico e terminologia do Artifact Registry.
+
+## [0.7.1] - 2026-08-18
+
+### Correções pré-implantação
+
+- **Artifact Registry:** cleanup passou a alcançar versões antigas mesmo quando tagueadas automaticamente, preservando tags explícitas `release-`, `keep-` e `rollback-` e as 10 versões mais recentes; dry-run e confirmação destrutiva continuam obrigatórios.
+- **Storage → R2:** `--verify` agora exige cobertura integral dos objetos elegíveis e separa listados, elegíveis, ignorados justificadamente, verificados, ausentes, divergentes, falhas e paths rejeitados; qualquer lacuna produz exit code não zero e impede exclusão da origem.
+- **Fallback de fotografias:** exclusões de domínio durante a transição são provider-aware e alcançam R2 e Firebase Storage legado; falhas parciais produzem cleanup idempotente por provider.
+- **Resend:** `email.failed` deixou de virar supressão genericamente; quota, transiente, configuração, destinatário inválido, supressão e falha desconhecida recebem estados/categorias explícitos e seguros.
+- **Webhooks Resend:** máquina de estados monotônica usa timestamp do provedor e precedência explícita; estados terminais não regridem por eventos tardios.
+- **Semântica de entrega:** documentação e código deixam de pressupor exactly-once; a outbox mantém intenção determinística, entrega externa at-least-once, deduplicação local e idempotência adicional do provedor dentro de sua janela. `DELIVERY_UNCERTAIN` bloqueia retry automático quando a confirmação local não é segura.
+- **Inventário R2:** snapshots parciais não produzem percentual ou projeção integrais; abaixo da referência ficam `Inventário incompleto`, e um limite inferior já acima da referência pode sinalizar `Crítico`. Crescimentos e gráficos usam somente inventários completos.
+- **Região:** `cloudbuild.yaml` voltou a `us-west1`, coerente com o ambiente histórico, e valida `_REGION` antes do build.
+- **Node.js:** baseline harmonizada em Node `>=22.22.2 <23`, com Docker `22.22.2`, package/lockfiles e Worker coerentes.
+- **Worker:** removida a dependência local não utilizada do projeto raiz; lockfile atualizado.
+- **Testes:** adicionados testes específicos para cleanup tagueado, verificação 100/100 e 99/100, hash/tamanho, fallback A–H, falhas/webhooks Resend, entrega incerta e inventário R2 acima/abaixo do limite.
+
+## [0.7.0] - 2026-08-18
+
+### E-mail transacional
+
+- Integração real com Resend pelo backend, remetente validado, webhook assinado e painel administrativo de status, teste e reprocessamento.
+- Outbox Firestore criada na mesma transação da ocorrência `REAL`, com uma entrega por destinatário, identidade determinística baseada em hash e idempotency key do provedor.
+- Claims transacionais com lease para concorrência no Cloud Run, backoff limitado, classificação de erros permanentes/transitórios/quota/supressão e estados de delivered, bounced e complained.
+- Payload e logs minimizados, sem chave de acompanhamento, descrição, fotografia, IP ou lista de destinatários.
+
+### Fotografias e Cloudflare R2
+
+- Cloudflare R2 privado passa a ser o armazenamento produtivo obrigatório; Firebase Storage fica restrito a emulador e fallback legado temporário de leitura.
+- Repositório R2 com AWS SDK v3, headers privados, paginação, metadata e exclusão idempotente.
+- Migração Storage → R2 em dry-run/apply, verificação de integridade e exclusão da origem em procedimento separado com confirmação forte.
+- Reconciliação R2 × Firestore paginada, proteção de inventário incompleto/janela de segurança e cleanup persistente para compensações.
+
+### Hospedagem e manutenção
+
+- Build separado para Cloudflare Pages e Cloud Run; Cloud Run torna-se API only e deixa de servir o frontend em produção.
+- Fallback SPA e headers de segurança compatíveis com Pages; CORS de produção passa a exigir origens HTTPS exatas e sem wildcard.
+- Maintenance Worker com cron em UTC e assinatura HMAC para processar notificações e snapshots, preservando comandos manuais do Administrador.
+
+### Infraestrutura e capacidade
+
+- Nova página exclusiva do Administrador com indicadores agregados de R2, Firestore, Resend, cleanup, reconciliação e Artifact Registry.
+- Snapshots diários idempotentes, histórico 30/90/365 dias, crescimento e projeções sinalizadas como estimativas.
+- Referências operacionais configuráveis, verificadas inicialmente em 2026-08-18, e níveis Normal/Atenção/Alerta/Crítico sem bloqueio automático.
+- Política revisável do Artifact Registry, dry-run obrigatório antes de apply e snapshot por script externo sem ampliar permissões do Cloud Run.
+
+### Segurança, documentação e testes
+
+- Firestore/Storage client-side continuam deny-all; novas coleções administrativas permanecem server-only.
+- Endpoints internos usam HMAC com janela antirreplay; Resend e R2 permanecem exclusivamente no backend.
+- Metadados, blueprint, exemplos de ambiente, documentação operacional, migração, implantação e homologação atualizados para 0.7.0.
+- Cobertura adicionada para outbox, Resend, R2, reconciliação, Pages/CORS, capacidade, Worker, assinatura de manutenção e transação Firebase.
+
 ## [0.6.2] - 2026-08-17
 
 ### Corrigido

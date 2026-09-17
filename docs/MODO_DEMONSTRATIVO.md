@@ -1,8 +1,8 @@
-# Dados demonstrativos — versão 0.5.0
+# Dados demonstrativos — comportamento ativo na versão 0.7.0
 
 ## 1. Princípio
 
-A versão 0.5.0 não possui uma segunda fonte de verdade em memória para ocorrências ou fotografias. Ocorrências, protocolos, histórico, categorias, localizações, configuração operacional e metadados de fotografias são persistidos no Firestore. Os bytes das fotografias são persistidos exclusivamente no Cloud Storage for Firebase, por intermédio do backend.
+A aplicação não possui uma segunda fonte de verdade em memória para ocorrências ou fotografias. Ocorrências, protocolos, histórico, categorias, localizações, configuração operacional e metadados de fotografias são persistidos no Firestore. Em produção, os bytes das fotografias são persistidos no Cloudflare R2 privado por intermédio do backend.
 
 Não existem mais `ENABLE_TEMPORARY_PHOTO_STORAGE`, `InMemoryPhotoRepository` ou armazenamento temporário de fotografias no runtime de produção.
 
@@ -27,8 +27,8 @@ Proteções:
 
 Os locais fornecidos no seed de referência são identificados como provisórios/demonstrativos. Eles não representam cadastro físico oficial do campus e devem ser substituídos quando a estrutura institucional confirmada for fornecida.
 
-## 5. Fotografias na versão 0.5.0
+## 5. Fotografias na versão 0.7.0
 
-Fotografias reais utilizam Cloud Storage inclusive em desenvolvimento, quando o fluxo fotográfico é exercitado. No Emulator Suite, Auth, Firestore e Storage devem ser configurados em conjunto, evitando combinação acidental de serviços locais com bucket real.
+Produção exige R2. No Emulator Suite, Auth, Firestore e Firebase Storage devem ser configurados em conjunto, evitando combinação acidental de serviços locais com bucket real. O Storage Emulator é apenas o backend local da mesma abstração e não representa a arquitetura produtiva.
 
-A existência lógica da fotografia é definida pelo documento Firestore `occurrences/{occurrenceId}/photos/{photoId}`. Os bytes são armazenados no Storage. Clientes Web não acessam o bucket diretamente; toda leitura e gravação passa pela API Express e pelo Firebase Admin SDK.
+A existência lógica da fotografia é definida pelo documento Firestore `occurrences/{occurrenceId}/photos/{photoId}`. Os bytes produtivos são armazenados no R2. Clientes Web não acessam bucket diretamente; toda leitura e gravação passa pela API Express.

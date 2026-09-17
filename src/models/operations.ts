@@ -2,11 +2,13 @@ import type { OccurrencePriority, OccurrenceStatus } from './occurrence';
 
 export interface OperationalTeam {
   id: string;
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   name: string;
   description?: string;
   active: boolean;
   sortOrder: number;
+  notificationEmail?: string;
+  isInitialIntakeTeam: boolean;
   memberAdminUserIds: string[];
   createdAt: string;
   createdBy: string;
@@ -19,6 +21,8 @@ export interface TeamCreateInput {
   description?: string;
   active?: boolean;
   sortOrder: number;
+  notificationEmail?: string | null;
+  isInitialIntakeTeam?: boolean;
   memberAdminUserIds?: string[];
 }
 export type TeamUpdateInput = Partial<TeamCreateInput>;

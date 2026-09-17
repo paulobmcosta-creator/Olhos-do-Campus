@@ -1,0 +1,30 @@
+substitutions:
+  _REGION: us-west1
+  _REPOSITORY: cloud-run-source-deploy
+  _IMAGE: olhos-do-campus-api
+  _IMAGE_TAG: v1.0.0
+steps:
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        test -n "${_REGION}" || { echo "_REGION é obrigatória." >&2; exit 2; }
+        case "${_REGION}" in
+          *[!a-z0-9-]*|'') echo "_REGION inválida: ${_REGION}" >&2; exit 2 ;;
+        esac
+        echo "Região resolvida para build: ${_REGION}"
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:${_IMAGE_TAG}
+options:
+  logging: CLOUD_LOGGING_ONLY

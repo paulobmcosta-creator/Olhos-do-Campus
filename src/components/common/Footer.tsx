@@ -18,7 +18,7 @@ export function Footer(): React.JSX.Element {
         </div>
         <p className="text-xs md:text-right">
           {institution}<br />
-          Versão {APP_VERSION} — ocorrências e dados de referência persistidos no Cloud Firestore
+          Versão {APP_VERSION} — Sistema institucional de atendimento e infraestrutura
         </p>
       </div>
     </footer>
