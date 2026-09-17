@@ -88,7 +88,7 @@ const parsed = z.object({
   authEmulatorHost: import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST ?? '127.0.0.1',
   authEmulatorPort: import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_PORT ?? 9099,
   appCheckEnabled: import.meta.env.VITE_APP_CHECK_ENABLED === 'true' || __ODC_AI_STUDIO_PREVIEW__,
-  appCheckDebug: import.meta.env.VITE_APP_CHECK_DEBUG === 'true',
+  appCheckDebug: import.meta.env.VITE_APP_CHECK_DEBUG === 'true' || __ODC_AI_STUDIO_PREVIEW__,
 });
 
 if (!parsed.success) {
