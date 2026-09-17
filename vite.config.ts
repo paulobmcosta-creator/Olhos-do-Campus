@@ -20,12 +20,16 @@ function isAiStudioPreview(): boolean {
 
 export default defineConfig(({ mode }) => {
   const loadedEnv = loadEnv(mode, process.cwd(), '');
+  const aiStudioPreview = isAiStudioPreview();
   const explicitProxyTarget = process.env.VITE_DEV_API_PROXY_TARGET ?? loadedEnv.VITE_DEV_API_PROXY_TARGET;
   const devApiProxyTarget = resolveOptionalProxyTarget(
-    explicitProxyTarget ?? (isAiStudioPreview() ? AI_STUDIO_PREVIEW_API_TARGET : undefined),
+    explicitProxyTarget ?? (aiStudioPreview ? AI_STUDIO_PREVIEW_API_TARGET : undefined),
   );
 
   return {
+    define: {
+      __ODC_AI_STUDIO_PREVIEW__: JSON.stringify(aiStudioPreview),
+    },
     plugins: [react(), tailwindcss()],
     build: {
       outDir: 'dist/client',
