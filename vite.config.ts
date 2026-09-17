@@ -27,9 +27,6 @@ export default defineConfig(({ mode }) => {
   );
 
   return {
-    define: {
-      __ODC_AI_STUDIO_PREVIEW__: JSON.stringify(aiStudioPreview),
-    },
     plugins: [react(), tailwindcss()],
     build: {
       outDir: 'dist/client',
