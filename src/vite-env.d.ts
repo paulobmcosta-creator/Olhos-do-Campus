@@ -1,7 +1,5 @@
 /// <reference types="vite/client" />
 
-declare const __ODC_AI_STUDIO_PREVIEW__: boolean;
-
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
   readonly VITE_FIREBASE_API_KEY?: string;
