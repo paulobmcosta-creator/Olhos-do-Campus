@@ -423,5 +423,6 @@ describe('G09B-F006 / G09B-F007 — Security Headers e CSP', () => {
     expect(content).toContain('Strict-Transport-Security:');
     expect(content).toContain('X-Content-Type-Options: nosniff');
     expect(content).toContain('X-Frame-Options: DENY');
+    expect(content).toContain("script-src 'self' https://apis.google.com");
   });
 });
