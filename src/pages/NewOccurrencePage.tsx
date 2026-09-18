@@ -53,7 +53,13 @@ export function NewOccurrencePage(): React.JSX.Element {
   const selectedCampus = locations.find((location) => location.id === draft.location.campusId);
   const selectedBuilding = selectedCampus?.buildings.find((building) => building.id === draft.location.buildingId);
   const selectedFloor = selectedBuilding?.floors.find((floor) => floor.id === draft.location.floorId);
-  const selectedRoom = selectedFloor?.rooms.find((room) => room.id === draft.location.roomId);
+  const availableRooms = useMemo(
+    () => [...(selectedFloor?.rooms ?? [])]
+      .filter((room) => room.active !== false)
+      .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR', { sensitivity: 'base', numeric: true })),
+    [selectedFloor],
+  );
+  const selectedRoom = availableRooms.find((room) => room.id === draft.location.roomId);
   const selectedCategory = categories.find((category) => category.id === draft.categoryId);
 
   useEffect(() => {
@@ -298,7 +304,7 @@ export function NewOccurrencePage(): React.JSX.Element {
                   aria-describedby={fieldError(errors, 'location.campusId') ? 'campus-error' : undefined}
                 >
                   <option value="">Selecione</option>
-                  {locations.map((location) => <option key={location.id} value={location.id}>{location.campusName}{location.provisional === true ? ' — provisório' : ''}</option>)}
+                  {locations.map((location) => <option key={location.id} value={location.id}>{location.campusName}</option>)}
                 </select>
                 {fieldError(errors, 'location.campusId') !== undefined && <p id="campus-error" className="form-error">{fieldError(errors, 'location.campusId')}</p>}
               </div>
@@ -357,7 +363,7 @@ export function NewOccurrencePage(): React.JSX.Element {
                   aria-describedby={fieldError(errors, 'location.roomId') ? 'room-error' : undefined}
                 >
                   <option value="">Selecione</option>
-                  {selectedFloor?.rooms.filter((r) => r.active !== false).map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+                  {availableRooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
                 </select>
                 {fieldError(errors, 'location.roomId') !== undefined && <p id="room-error" className="form-error">{fieldError(errors, 'location.roomId')}</p>}
               </div>

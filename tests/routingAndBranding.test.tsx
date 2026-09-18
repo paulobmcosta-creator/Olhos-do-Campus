@@ -72,6 +72,8 @@ describe('rotas e identidade institucional', () => {
   it('renderiza nome fantasia, nome oficial e marca com texto alternativo adequado', async () => {
     renderRoute();
     expect(await screen.findByText('Ajude-nos a cuidar e melhorar os espaços do campus.')).toBeInTheDocument();
+    expect(screen.getByText('É possível fazer o registro sem identificação pessoal obrigatória. Ao final, você receberá um protocolo e uma chave para acompanhar a ocorrência.')).toBeInTheDocument();
+    expect(screen.queryByText(/A versão .* utiliza Firebase Authentication/i)).not.toBeInTheDocument();
     expect(screen.getAllByText('Olhos do Campus').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Sistema Institucional de Manutenção da Infraestrutura Física').length).toBeGreaterThan(0);
     expect(screen.getByAltText('Instituto Federal do Espírito Santo — Campus Barra de São Francisco')).toBeInTheDocument();

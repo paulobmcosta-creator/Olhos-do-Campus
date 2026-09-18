@@ -1,4 +1,3 @@
-import { APP_VERSION } from '../config/version';
 import { AlertTriangle, ClipboardList, HardHat, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { BRANDING } from '../config/branding';
@@ -22,7 +21,7 @@ export function HomePage(): React.JSX.Element {
           Identificou um problema de limpeza, iluminação, climatização, instalação elétrica, estrutura predial ou outra condição relacionada à infraestrutura física? Registre a ocorrência para que a equipe responsável possa avaliar, encaminhar e acompanhar a situação.
         </p>
         <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-700">
-          O registro sem identificação pessoal obrigatória pode ser realizado. Ao final, serão fornecidos um protocolo e uma chave de acompanhamento.
+          É possível fazer o registro sem identificação pessoal obrigatória. Ao final, você receberá um protocolo e uma chave para acompanhar a ocorrência.
         </p>
         <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Link to={ROUTES.newOccurrence} className="btn-primary">
@@ -67,12 +66,6 @@ export function HomePage(): React.JSX.Element {
         </div>
       </section>
 
-      <section className="border-t border-slate-300 pt-6">
-        <h2 className="text-xl font-bold text-slate-950">{BRANDING.officialName}</h2>
-        <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-700">
-          A versão {APP_VERSION} utiliza Firebase Authentication, App Check e Cloud Firestore, Cloudflare R2 privado para os bytes das fotografias e Resend para notificações transacionais habilitadas pela Administração. O acesso às imagens permanece mediado pela API institucional.
-        </p>
-      </section>
     </div>
   );
 }

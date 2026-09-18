@@ -18,7 +18,7 @@ export function Footer(): React.JSX.Element {
         </div>
         <p className="text-xs md:text-right">
           {institution}<br />
-          Versão {APP_VERSION} — Sistema institucional de atendimento e infraestrutura
+          Versão {APP_VERSION} — {BRANDING.officialName}
         </p>
       </div>
     </footer>

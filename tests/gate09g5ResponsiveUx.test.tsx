@@ -563,7 +563,7 @@ describe('Gate 0.9-G.5 — UX, Responsividade e Adaptação Mobile/Tablet', () =
 
       // 3. Footer
       render(<Footer />);
-      expect(screen.getByText(/Sistema institucional de atendimento e infraestrutura/i)).toBeInTheDocument();
+      expect(screen.getByText(/Versão .* — Sistema Institucional de Manutenção da Infraestrutura Física/i)).toBeInTheDocument();
       expect(screen.queryByText(/persistidos no Cloud Firestore/i)).not.toBeInTheDocument();
     });
   });

@@ -153,6 +153,7 @@ vi.mock('../src/context/AppDataContext', () => ({
         {
           id: 'campus-bsf',
           campusName: 'Campus Barra de São Francisco',
+          provisional: true,
           buildings: [
             {
               id: 'b-adm',
@@ -164,7 +165,9 @@ vi.mock('../src/context/AppDataContext', () => ({
                   id: 'f-terreo',
                   name: 'Térreo',
                   rooms: [
-                    { id: 'r-101', name: 'Sala 101', active: true, sortOrder: 1 },
+                    { id: 'r-z', name: 'Zeladoria', active: true, sortOrder: 1 },
+                    { id: 'r-101', name: 'Sala 101', active: true, sortOrder: 2 },
+                    { id: 'r-a', name: 'Auditório', active: true, sortOrder: 3 },
                   ],
                 },
               ],
@@ -437,6 +440,31 @@ describe('GATE 0.9-G.4 — Acessibilidade WCAG 2.2 AA', () => {
 
       // Verifica que campo opcional é expressamente identificado como opcional
       expect(screen.getByText('(opcional)')).toBeInTheDocument();
+    });
+  });
+
+  describe('Local público — apresentação e ordenação', () => {
+    it('não exibe marcador provisório no campus e ordena salas, ambientes e locais alfabeticamente', async () => {
+      const user = userEvent.setup();
+      render(
+        <MemoryRouter>
+          <NewOccurrencePage />
+        </MemoryRouter>
+      );
+
+      await user.click(screen.getByRole('button', { name: /próximo/i }));
+
+      const campusSelect = screen.getByLabelText(/campus ou unidade/i) as HTMLSelectElement;
+      const campusLabels = Array.from(campusSelect.options).map((option) => option.textContent ?? '');
+      expect(campusLabels.join(' ')).not.toMatch(/provisório/i);
+
+      await user.selectOptions(campusSelect, 'campus-bsf');
+      const buildingSelect = screen.getByLabelText(/prédio, bloco ou área/i);
+      await user.selectOptions(buildingSelect, 'b-adm');
+
+      const roomSelect = screen.getByLabelText(/sala, ambiente ou local/i) as HTMLSelectElement;
+      const roomLabels = Array.from(roomSelect.options).slice(1).map((option) => option.textContent ?? '');
+      expect(roomLabels).toEqual(['Auditório', 'Sala 101', 'Zeladoria']);
     });
   });
 
