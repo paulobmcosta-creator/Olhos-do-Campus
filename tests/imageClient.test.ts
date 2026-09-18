@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CLIENT_MAX_PHOTO_BYTES, revokePreparedPhoto, sanitizeImageFile } from '../src/utils/image';
+import { CLIENT_MAX_PHOTO_BYTES, CLIENT_WEBP_QUALITY, revokePreparedPhoto, sanitizeImageFile } from '../src/utils/image';
 
 let objectUrlSequence = 0;
 let createObjectUrl: ReturnType<typeof vi.fn>;
 let revokeObjectUrl: ReturnType<typeof vi.fn>;
 let createElementSpy: ReturnType<typeof vi.spyOn>;
+let canvasToBlobMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   objectUrlSequence = 0;
@@ -22,13 +23,17 @@ beforeEach(() => {
   }
   vi.stubGlobal('Image', TestImage);
 
+  canvasToBlobMock = vi.fn((callback: BlobCallback) => {
+    callback(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' }));
+  });
+
   const original = document.createElement.bind(document);
   createElementSpy = vi.spyOn(document, 'createElement').mockImplementation(((tagName: string, options?: ElementCreationOptions) => {
     const element = original(tagName, options);
     if (tagName.toLowerCase() === 'canvas') {
       const canvas = element as HTMLCanvasElement;
       Object.defineProperty(canvas, 'getContext', { configurable: true, value: vi.fn(() => ({ drawImage: vi.fn() })) });
-      Object.defineProperty(canvas, 'toBlob', { configurable: true, value: vi.fn((callback: BlobCallback) => callback(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' }))) });
+      Object.defineProperty(canvas, 'toBlob', { configurable: true, value: canvasToBlobMock });
     }
     return element;
   }) as typeof document.createElement);
@@ -41,7 +46,7 @@ afterEach(() => {
 
 describe('processamento de fotografias no cliente', () => {
   for (const mime of ['image/jpeg', 'image/png', 'image/webp']) {
-    it(`aceita ${mime}, redimensiona e produz File WebP + Object URL temporária`, async () => {
+    it(`aceita ${mime}, redimensiona e produz File WebP + Object URL temporária quando o navegador suporta WebP`, async () => {
       const prepared = await sanitizeImageFile(new File([new Uint8Array([1, 2, 3])], 'original-com-nome-pessoal.ext', { type: mime }));
       expect(prepared.file.type).toBe('image/webp');
       expect(prepared.file.name).toBe('photo.webp');
@@ -52,6 +57,66 @@ describe('processamento de fotografias no cliente', () => {
       expect(revokeObjectUrl).toHaveBeenCalledWith('blob:test-2');
     });
   }
+
+  it('usa JPEG quando o navegador não consegue exportar canvas em WebP, como no Safari/iOS', async () => {
+    canvasToBlobMock.mockImplementation((callback: BlobCallback, type?: string) => {
+      if (type === 'image/webp') {
+        callback(new Blob([new Uint8Array([4, 5, 6])], { type: 'image/png' }));
+        return;
+      }
+      if (type === 'image/jpeg') {
+        callback(new Blob([new Uint8Array([7, 8, 9])], { type: 'image/jpeg' }));
+        return;
+      }
+      callback(null);
+    });
+
+    const prepared = await sanitizeImageFile(
+      new File([new Uint8Array([1, 2, 3])], 'camera-do-iphone.jpg', { type: 'image/jpeg' }),
+    );
+
+    expect(prepared.file.type).toBe('image/jpeg');
+    expect(prepared.file.name).toBe('photo.jpg');
+    expect(prepared.previewUrl).toBe('blob:test-2');
+    expect(canvasToBlobMock).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Function),
+      'image/webp',
+      CLIENT_WEBP_QUALITY,
+    );
+    expect(canvasToBlobMock).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Function),
+      'image/jpeg',
+      CLIENT_WEBP_QUALITY,
+    );
+  });
+
+  it('reutiliza PNG seguro como último fallback quando WebP e JPEG não estão disponíveis', async () => {
+    canvasToBlobMock.mockImplementation((callback: BlobCallback, type?: string) => {
+      if (type === 'image/webp') {
+        callback(new Blob([new Uint8Array([4, 5, 6])], { type: 'image/png' }));
+        return;
+      }
+      callback(null);
+    });
+
+    const prepared = await sanitizeImageFile(
+      new File([new Uint8Array([1, 2, 3])], 'imagem.png', { type: 'image/png' }),
+    );
+
+    expect(prepared.file.type).toBe('image/png');
+    expect(prepared.file.name).toBe('photo.png');
+  });
+
+  it('rejeita quando o navegador não consegue produzir WebP, JPEG nem PNG', async () => {
+    canvasToBlobMock.mockImplementation((callback: BlobCallback) => callback(null));
+
+    await expect(
+      sanitizeImageFile(new File([new Uint8Array([1, 2, 3])], 'foto.jpg', { type: 'image/jpeg' })),
+    ).rejects.toThrow(/formato compatível/iu);
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:test-1');
+  });
 
   it('rejeita formato preliminar não permitido e arquivo acima de 8 MB', async () => {
     await expect(sanitizeImageFile(new File([new Uint8Array([1])], 'arquivo.gif', { type: 'image/gif' }))).rejects.toThrow(/JPEG, PNG ou WebP/iu);
