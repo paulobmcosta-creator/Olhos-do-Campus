@@ -1,4 +1,4 @@
-# Processamento de imagens — versão 0.5.0
+# Processamento de imagens — versão 1.0.0
 
 ## Entradas aceitas
 
@@ -10,7 +10,17 @@ Limites: 8 MB por arquivo recebido, até 3 fotografias iniciais, até 3 fotograf
 
 ## Cliente
 
-`src/utils/image.ts` realiza otimização de tráfego: valida MIME/tamanho preliminar, decodifica a imagem, limita o maior lado a 1600 px, recria pixels em canvas, gera WebP com qualidade 0,82 e retorna `File` + `ObjectURL` de pré-visualização. Object URLs são revogadas na remoção, substituição ou desmontagem. Essa etapa **não é barreira de segurança**.
+`src/utils/image.ts` realiza a otimização de tráfego e uma primeira sanitização: valida MIME/tamanho preliminar, decodifica a imagem, limita o maior lado a 1600 px e recria os pixels em `canvas`. A recriação em canvas evita encaminhar o arquivo original e seus metadados ao servidor.
+
+A codificação de saída segue esta ordem de compatibilidade:
+
+1. WebP com qualidade 0,82, quando o navegador consegue codificar canvas em `image/webp`;
+2. JPEG com qualidade 0,82 quando WebP não está disponível, incluindo Safari/iOS;
+3. PNG como último fallback compatível.
+
+O nome original do arquivo não é preservado. A saída intermediária usa `photo.webp`, `photo.jpg` ou `photo.png`, conforme o formato efetivamente produzido pelo navegador, e retorna também uma `ObjectURL` para pré-visualização. As Object URLs são revogadas na remoção, substituição ou desmontagem.
+
+A etapa no cliente **não é barreira de segurança** e não substitui o processamento autoritativo no servidor.
 
 ## Servidor — processamento autoritativo
 
@@ -28,12 +38,16 @@ Limites: 8 MB por arquivo recebido, até 3 fotografias iniciais, até 3 fotograf
 
 A implementação não chama métodos de preservação de metadata. A saída é uma nova codificação e não preserva EXIF, GPS, XMP, IPTC, comentários ou nome original.
 
+Independentemente de o cliente enviar WebP, JPEG ou PNG sanitizado, o arquivo persistido pelo fluxo normal é novamente processado no servidor e convertido para WebP.
+
 ## Transparência e animação
 
-WebP preserva canal alfa quando presente. A aplicação não amplia imagens pequenas e rejeita entradas multi-frame/multi-page para evitar animações.
+WebP preserva canal alfa quando presente. Em navegadores sem codificação WebP no canvas, o fallback JPEG é priorizado por eficiência para fotografias; PNG permanece disponível como último fallback compatível. A aplicação não amplia imagens pequenas e rejeita entradas multi-frame/multi-page para evitar animações.
 
 ## Comprovação automatizada
 
-`tests/fixtures/photo-with-exif-gps.jpg` e `photo-with-exif-gps-xmp.jpg` são fixtures sintéticas, sem fotografias reais de usuários. Os testes verificam orientação, remoção de EXIF/GPS/texto/XMP, ausência de metadata no arquivo resultante, dimensões, proporção, não ampliação, WebP, miniatura e checksum.
+`tests/fixtures/photo-with-exif-gps.jpg` e `photo-with-exif-gps-xmp.jpg` são fixtures sintéticas, sem fotografias reais de usuários. Os testes do servidor verificam orientação, remoção de EXIF/GPS/texto/XMP, ausência de metadata no arquivo resultante, dimensões, proporção, não ampliação, WebP, miniatura e checksum.
 
-A simples existência de função chamada “sanitize” não é usada como evidência: a suíte inspeciona o arquivo resultante com `sharp.metadata()`.
+`tests/imageClient.test.ts` verifica também o caminho compatível com Safari/iOS: quando a tentativa de exportar o canvas em WebP devolve outro formato, o cliente tenta JPEG e mantém PNG como fallback final.
+
+A simples existência de função chamada “sanitize” não é usada como evidência: a suíte inspeciona o arquivo resultante com `sharp.metadata()` no processamento autoritativo.
