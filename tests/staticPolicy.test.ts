@@ -6,7 +6,7 @@ import { APP_VERSION } from '../src/config/version';
 
 const projectRoot = process.cwd();
 const activeRoots = ['src', 'server', 'scripts'];
-const activeFiles = ['index.html', 'metadata.json', 'package.json', '.env.example', 'firebase.json', 'firebase.ai-studio.json', 'firebase-blueprint.json', 'firestore.rules', 'storage.rules'];
+const activeFiles = ['index.html', 'metadata.json', 'package.json', '.env.example', 'firebase.json', 'firebase-blueprint.json', 'firestore.rules', 'storage.rules'];
 
 function collectFiles(directory: string): string[] {
   return readdirSync(directory).flatMap((entry) => {
@@ -121,8 +121,7 @@ describe('políticas institucionais, segurança e ambiente', () => {
     const applet = JSON.parse(readFileSync(join(projectRoot, 'firebase-applet-config.json'), 'utf8')) as { projectId?: string; firestoreDatabaseId?: string };
     expect(applet.projectId).toBe('gen-lang-client-0120954905');
     expect(applet.firestoreDatabaseId).toBe('ai-studio-olhosdocampus-63a884f8-f929-40fc-8c6e-326a409c40cf');
-    const aiStudioConfig = readFileSync(join(projectRoot, 'firebase.ai-studio.json'), 'utf8');
-    expect(aiStudioConfig).toContain(applet.firestoreDatabaseId ?? '');
+    expect(existsSync(join(projectRoot, 'firebase.ai-studio.json'))).toBe(false);
     const runtime = readFileSync(join(projectRoot, 'server/config/firebaseRuntime.ts'), 'utf8');
     expect(runtime).toContain('firebase-applet-config.json');
     expect(runtime).toContain('somente pode ser utilizado com Firebase Emulator Suite');
