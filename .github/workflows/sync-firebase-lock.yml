@@ -1,0 +1,65 @@
+name: Sync Firebase lockfile
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-firebase-lockfile
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Regenerate lockfile and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.22.2
+          cache: npm
+
+      - name: Regenerate package-lock.json
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Install dependencies from regenerated lockfile
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build Cloudflare Pages frontend
+        run: npm run build:pages
+
+      - name: Commit regenerated lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json is already synchronized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: sync lockfile for Firebase 12.19.0"
+          git push origin HEAD:main
