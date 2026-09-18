@@ -454,7 +454,7 @@ describe('GATE 0.9-G.4 — Acessibilidade WCAG 2.2 AA', () => {
 
       await user.click(screen.getByRole('button', { name: /próximo/i }));
 
-      const campusSelect = screen.getByLabelText(/campus ou unidade/i) as HTMLSelectElement;
+      const campusSelect = screen.getByLabelText(/campus ou unidade/i);
       const campusLabels = Array.from(campusSelect.options).map((option) => option.textContent ?? '');
       expect(campusLabels.join(' ')).not.toMatch(/provisório/i);
 
@@ -462,7 +462,7 @@ describe('GATE 0.9-G.4 — Acessibilidade WCAG 2.2 AA', () => {
       const buildingSelect = screen.getByLabelText(/prédio, bloco ou área/i);
       await user.selectOptions(buildingSelect, 'b-adm');
 
-      const roomSelect = screen.getByLabelText(/sala, ambiente ou local/i) as HTMLSelectElement;
+      const roomSelect = screen.getByLabelText(/sala, ambiente ou local/i);
       const roomLabels = Array.from(roomSelect.options).slice(1).map((option) => option.textContent ?? '');
       expect(roomLabels).toEqual(['Auditório', 'Sala 101', 'Zeladoria']);
     });

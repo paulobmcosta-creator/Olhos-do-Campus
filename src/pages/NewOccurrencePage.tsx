@@ -53,12 +53,9 @@ export function NewOccurrencePage(): React.JSX.Element {
   const selectedCampus = locations.find((location) => location.id === draft.location.campusId);
   const selectedBuilding = selectedCampus?.buildings.find((building) => building.id === draft.location.buildingId);
   const selectedFloor = selectedBuilding?.floors.find((floor) => floor.id === draft.location.floorId);
-  const availableRooms = useMemo(
-    () => [...(selectedFloor?.rooms ?? [])]
-      .filter((room) => room.active !== false)
-      .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR', { sensitivity: 'base', numeric: true })),
-    [selectedFloor],
-  );
+  const availableRooms = [...(selectedFloor?.rooms ?? [])]
+    .filter((room) => room.active !== false)
+    .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR', { sensitivity: 'base', numeric: true }));
   const selectedRoom = availableRooms.find((room) => room.id === draft.location.roomId);
   const selectedCategory = categories.find((category) => category.id === draft.categoryId);
 

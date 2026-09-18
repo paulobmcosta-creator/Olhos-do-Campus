@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - package.json
+      - src/pages/NewOccurrencePage.tsx
+      - tests/accessibilityGate09g4.test.tsx
 
 permissions:
   contents: write
