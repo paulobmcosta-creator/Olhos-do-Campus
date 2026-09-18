@@ -3,6 +3,11 @@
 
 ## [1.0.0] - 2026-09-15
 
+### Correções pós-implantação — 18/09/2026
+- **Login administrativo Google no Cloudflare Pages:** ajuste da Content Security Policy para permitir o loader `https://apis.google.com`, eliminando o bloqueio que resultava em `auth/internal-error`. A correção foi validada por pipeline e o login administrativo foi confirmado funcional em produção.
+- **Compatibilidade de fotografias com Safari/iOS:** o processamento no cliente passou a tentar WebP e, quando o navegador não oferece codificação WebP em canvas, utilizar JPEG como fallback e PNG como último fallback compatível. O arquivo original continua não sendo enviado diretamente; o servidor permanece como processamento autoritativo e reencoda a imagem persistida em WebP sem preservar EXIF/GPS/XMP.
+- **Regressão automatizada do processamento de imagens:** `tests/imageClient.test.ts` passou a reproduzir o comportamento do Safari/iOS e verificar os fallbacks WebP → JPEG → PNG. Validação pós-correção: TypeScript, lint e build aprovados; 72 arquivos de teste aprovados, 575 testes aprovados e 3 ignorados.
+
 ### Promoção Formal e Alinhamento de Release
 - **Promoção da Árvore Estável:** Elevação formal da árvore homologada do Ciclo 0.9.0 para a versão candidata canônica 1.0.0.
 - **Sincronização de Identidade de Release:** Unificação estrita da versão `1.0.0` nos manifestos de pacote raiz (`package.json`, `package-lock.json`), configuração de runtime (`src/config/version.ts`), metadados institucionais (`metadata.json`, `firebase-blueprint.json`), tags de container de build (`cloudbuild.yaml`) e scripts de implantação canônica (`scripts/deployCloudRun.sh` com `CONFIRM_DEPLOY_1_0`).
