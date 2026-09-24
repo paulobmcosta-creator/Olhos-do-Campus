@@ -276,27 +276,29 @@ export class OccurrenceService{
    const thirty=new Date(now.getTime()-30*86400000);
 
    if(user.role==='Atendente'){
+     const base={dataClassification:'REAL' as const,assignedToAdminUserId:user.id};
      const [urgentOrEmergency,slaBreached,inService,awaitingAction,resolvedRecently]=await Promise.all([
-       this.occurrences.count({priorities:['Urgente','Emergencial'],isClosed:false,assignedToAdminUserId:user.id}),
-       this.occurrences.count({slaBreachedAt:now,assignedToAdminUserId:user.id}),
-       this.occurrences.count({status:'Em atendimento',assignedToAdminUserId:user.id}),
-       this.occurrences.count({statuses:['Aguardando material','Aguardando contratação ou serviço externo'],assignedToAdminUserId:user.id}),
-       this.occurrences.count({status:'Resolvida',resolvedAtFrom:thirty,resolvedAtTo:now,assignedToAdminUserId:user.id}),
+       this.occurrences.count({...base,priorities:['Urgente','Emergencial'],isClosed:false}),
+       this.occurrences.count({...base,slaBreachedAt:now}),
+       this.occurrences.count({...base,status:'Em atendimento'}),
+       this.occurrences.count({...base,statuses:['Aguardando material','Aguardando contratação ou serviço externo']}),
+       this.occurrences.count({...base,status:'Resolvida',resolvedAtFrom:thirty,resolvedAtTo:now}),
      ]);
      return{urgentOrEmergency,slaBreached,withoutRouting:0,inService,awaitingAction,resolvedRecently,receivedToday:0};
    }
 
+   const base={dataClassification:'REAL' as const};
    const [urgentOrEmergency,slaBreached,withoutTeam,withoutResponsible,inService,awaitingAction,resolvedRecently,receivedToday]=await Promise.all([
-     this.occurrences.count({priorities:['Urgente','Emergencial'],isClosed:false}),
-     this.occurrences.count({slaBreachedAt:now}),
-     this.occurrences.count({hasTeam:false,isClosed:false}),
-     this.occurrences.count({hasResponsible:false,isClosed:false}),
-     this.occurrences.count({status:'Em atendimento'}),
-     this.occurrences.count({statuses:['Aguardando material','Aguardando contratação ou serviço externo']}),
-     this.occurrences.count({status:'Resolvida',resolvedAtFrom:thirty,resolvedAtTo:now}),
-     this.occurrences.count({createdAtFrom:start,createdAtTo:end})
+     this.occurrences.count({...base,priorities:['Urgente','Emergencial'],isClosed:false}),
+     this.occurrences.count({...base,slaBreachedAt:now}),
+     this.occurrences.count({...base,hasTeam:false,isClosed:false}),
+     this.occurrences.count({...base,hasResponsible:false,isClosed:false}),
+     this.occurrences.count({...base,status:'Em atendimento'}),
+     this.occurrences.count({...base,statuses:['Aguardando material','Aguardando contratação ou serviço externo']}),
+     this.occurrences.count({...base,status:'Resolvida',resolvedAtFrom:thirty,resolvedAtTo:now}),
+     this.occurrences.count({...base,createdAtFrom:start,createdAtTo:end})
    ]);
-   const withoutBoth=await this.occurrences.count({hasTeam:false,hasResponsible:false,isClosed:false});
+   const withoutBoth=await this.occurrences.count({...base,hasTeam:false,hasResponsible:false,isClosed:false});
    return{urgentOrEmergency,slaBreached,withoutRouting:withoutTeam+withoutResponsible-withoutBoth,inService,awaitingAction,resolvedRecently,receivedToday};
  }
   private async getTrackedOccurrence(protocol: string, key: string): Promise<StoredOccurrence> {
