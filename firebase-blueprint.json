@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "project": "Olhos do Campus",
   "institution": "Instituto Federal do Espírito Santo — Campus Barra de São Francisco",
   "architecture": {
@@ -32,7 +32,7 @@
     "Occurrence": {
       "collection": "occurrences",
       "schemaVersion": 2,
-      "description": "Estado materializado atual. Mantém valores reportados imutáveis e snapshots atuais, classificação REAL/TEST, roteamento e snapshot de SLA.",
+      "description": "Estado materializado atual. Mantém valores reportados imutáveis e snapshots atuais, classificação REAL/TEST, roteamento, apensamento operacional e snapshot de SLA.",
       "fields": {
         "protocol": "string",
         "trackingKeyHash": "string",
@@ -54,6 +54,12 @@
         "assignedToDisplayNameSnapshot": "string?",
         "duplicateOfOccurrenceId": "string?",
         "duplicateOfProtocol": "string?",
+        "attachedToOccurrenceId": "string? (raiz do agrupamento de apensamento)",
+        "attachedToProtocol": "string?",
+        "attachmentRelation": "DUPLICATE | SIMILAR?",
+        "attachmentReason": "string?",
+        "attachedAt": "Timestamp?",
+        "attachedByAdminUserId": "string?",
         "createdAt": "Timestamp",
         "updatedAt": "Timestamp",
         "closedAt": "Timestamp?",
