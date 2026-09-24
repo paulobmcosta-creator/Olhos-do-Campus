@@ -58,9 +58,9 @@ describe('G09B-F003 / G09G6R-F002 — Guard de maxScale: invariante de seguranç
       expect(text).toContain('[DRY-RUN]');
     });
 
-    it('exige token ALLOW_CLOUD_RUN_DEPLOY=CONFIRM_DEPLOY_1_0 para deploy real', () => {
+    it('exige token ALLOW_CLOUD_RUN_DEPLOY=CONFIRM_DEPLOY_1_0_1 para deploy real', () => {
       const text = readFileSync(DEPLOY_SCRIPT_PATH, 'utf-8');
-      expect(text).toContain('CONFIRM_DEPLOY_1_0');
+      expect(text).toContain('CONFIRM_DEPLOY_1_0_1');
     });
 
     it('G10C-F001: define PROJECT_ID canônico de produção gen-lang-client-0120954905', () => {
