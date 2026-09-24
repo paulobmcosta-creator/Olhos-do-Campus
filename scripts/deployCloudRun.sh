@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # =============================================================================
-# G09B-F003 / G09G6R-F002 — Canonical Cloud Run Deploy Wrapper | Olhos do Campus 1.0.0
+# G09B-F003 / G09G6R-F002 — Canonical Cloud Run Deploy Wrapper | Olhos do Campus 1.0.1
 # Gate: 1.0-B
 # =============================================================================
 # DRY-RUN é padrão SEMPRE. Use --apply para executar.
-# Requer: ALLOW_CLOUD_RUN_DEPLOY=CONFIRM_DEPLOY_1_0 para --apply
+# Requer: ALLOW_CLOUD_RUN_DEPLOY=CONFIRM_DEPLOY_1_0_1 para --apply
 #
 # INVARIANTE DE SEGURANÇA (G09B-F003):
 # max-instances DEVE ser fixado em 1 enquanto RATE_LIMIT_SCOPE=INSTANCE_LOCAL.
 #
 # USO:
 #   bash scripts/deployCloudRun.sh
-#   ALLOW_CLOUD_RUN_DEPLOY=CONFIRM_DEPLOY_1_0 bash scripts/deployCloudRun.sh --apply
+#   ALLOW_CLOUD_RUN_DEPLOY=CONFIRM_DEPLOY_1_0_1 bash scripts/deployCloudRun.sh --apply
 # =============================================================================
 
 set -euo pipefail
@@ -24,7 +24,7 @@ fi
 SERVICE_NAME="${SERVICE_NAME:-olhos-do-campus}"
 REGION="${REGION:-us-west1}"
 PROJECT_ID="${PROJECT_ID:-gen-lang-client-0120954905}"
-IMAGE_TAG="${IMAGE_TAG:-v1.0.0}"
+IMAGE_TAG="${IMAGE_TAG:-v1.0.1}"
 IMAGE="${IMAGE:-${REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/${SERVICE_NAME}:${IMAGE_TAG}}"
 
 # Invariante de Segurança G09B-F003: max-instances=1 obrigatório
@@ -50,15 +50,15 @@ if [[ "$DRY_RUN" == true ]]; then
   echo "  $CMD"
   echo ""
   echo "[DRY-RUN] Para executar o deploy real (requer autorização prévia):"
-  echo "  ALLOW_CLOUD_RUN_DEPLOY=CONFIRM_DEPLOY_1_0 bash $0 --apply"
+  echo "  ALLOW_CLOUD_RUN_DEPLOY=CONFIRM_DEPLOY_1_0_1 bash $0 --apply"
   echo ""
   echo "Dry-run concluído — nenhuma ação executada."
   exit 0
 fi
 
-if [[ "${ALLOW_CLOUD_RUN_DEPLOY:-}" != "CONFIRM_DEPLOY_1_0" ]]; then
+if [[ "${ALLOW_CLOUD_RUN_DEPLOY:-}" != "CONFIRM_DEPLOY_1_0_1" ]]; then
   echo "ERRO DE SEGURANÇA: Deploy real não autorizado!" >&2
-  echo "  Defina: ALLOW_CLOUD_RUN_DEPLOY=CONFIRM_DEPLOY_1_0" >&2
+  echo "  Defina: ALLOW_CLOUD_RUN_DEPLOY=CONFIRM_DEPLOY_1_0_1" >&2
   exit 1
 fi
 
