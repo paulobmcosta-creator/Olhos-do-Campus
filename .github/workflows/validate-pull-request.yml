@@ -38,3 +38,15 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Verify release identity
+        run: npm run verify:release
+
+      - name: Verify scale guard
+        run: npm run check:scale
+
+      - name: Maintenance Worker TypeScript check
+        run: npm run worker:typecheck
+
+      - name: Maintenance Worker tests
+        run: npm run worker:test
