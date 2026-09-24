@@ -74,7 +74,7 @@ describe('correções pré-implantação 0.7.1', () => {
     expect(cloudbuild).toContain('_REGION é obrigatória.');
     expect(rootPackage).toMatchObject({ version: '1.0.1', engines: { node: '>=22.22.2 <23' } });
     expect(workerPackage).toMatchObject({ version: '1.0.1', engines: { node: '>=22.22.2 <23' } });
-    expect(workerIndex).toMatch(//version:\\s*['"]1\\.0\\.1['"]/u/);
+    expect(workerIndex).toMatch(/version:\s*['"]1\.0\.1['"]/u);
     expect(workerPackage.dependencies ?? {}).not.toHaveProperty('olhos-do-campus');
     expect(dockerfile.match(/node:22\.22\.2-bookworm-slim/gu)).toHaveLength(2);
   });
