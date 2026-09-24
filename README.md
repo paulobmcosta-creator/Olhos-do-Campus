@@ -2,11 +2,11 @@
 
 **Sistema Institucional de Manutenção da Infraestrutura Física**  
 **Instituto Federal do Espírito Santo — Campus Barra de São Francisco**  
-**Versão 1.0.0**
+**Versão 1.0.1**
 
 Aplicação institucional para registro de ocorrências de manutenção da infraestrutura física sem identificação pessoal obrigatória, acompanhamento por protocolo e chave de acompanhamento no portal público, e gestão operacional e administrativa pelo corpo técnico e gestor do IFES Campus Barra de São Francisco.
 
-A versão 1.0.0 consolida a promoção formal da árvore estável homologada no Ciclo 0.9.0, alinhando a identidade de release em todos os componentes, corrigindo a versão em runtime do Cloudflare Maintenance Worker, endurecendo o verificador de conformidade de release e eliminando inconsistências documentais legadas.
+A versão 1.0.1 acrescenta controles de gestão operacional para classificar registros de teste e apensar ocorrências duplicadas ou similares. Registros TEST permanecem auditáveis, mas são excluídos dos indicadores operacionais padrão; ocorrências apensadas preservam seus registros individuais e compartilham o tratamento operacional definido para o agrupamento.
 
 ---
 
@@ -39,7 +39,7 @@ O cliente web no navegador nunca acessa o Firestore nem os buckets de armazename
 
 ## 2. Componentes Implantáveis
 
-A release 1.0.0 possui três componentes implantáveis e versionados de forma unificada:
+A release 1.0.1 possui três componentes implantáveis e versionados de forma unificada:
 
 1. **Cloud Run Backend (`CLOUD_RUN_BACKEND`)**: Serviço containerizado Node.js 22 rodando a API REST Express, executando a lógica de negócio, RBAC, auditoria, outbox de notificações e processamento de fotografias.
 2. **Cloudflare Pages Frontend (`CLOUDFLARE_PAGES_FRONTEND`)**: Single Page Application (SPA) construída com React 19 e Vite, servindo a interface pública para a comunidade acadêmica e o painel administrativo restrito.
@@ -64,10 +64,11 @@ A release 1.0.0 possui três componentes implantáveis e versionados de forma un
 O acesso ao painel administrativo requer autenticação segura via **Google Sign-In administrativo com restrições institucionais configuradas**. O sistema implementa controle de acesso baseado em papéis (RBAC) com mínimo privilégio:
 
 - **Administrador**: Controle pleno do sistema, gerenciamento de usuários administrativos, equipes operacionais, configurações de e-mail e capacidade, categorias, ambientes e auditoria global.
-- **Gestor**: Triagem e roteamento de ocorrências, priorização, redistribuição entre setores e equipes, e acompanhamento operacional global.
+- **Gestor**: Triagem e roteamento de ocorrências, priorização, redistribuição entre setores e equipes, acompanhamento operacional global, classificação de registros REAL/TEST e gestão de apensamentos.
 - **Atendente**: Papel de menor privilégio; acesso restrito estritamente às ocorrências atribuídas individualmente (`assignedToAdminUserId === user.id`), com permissão para adicionar notas internas com visibilidade delimitada, transitar status autorizados e registrar fotos de conclusão/solução.
 - **Equipe CGAO**: A Coordenação Geral de Administração, Orçamento e Finanças atua como equipe inicial canônica de acolhimento e triagem institucional das demandas.
 - **Histórico e Notas Internas**: Registro de auditoria append-only para cada evento de mudança de estado, comentários internos com controle de audiência (`INTERNAL` vs `RESPONSIBLE_TEAM`) e fotos de solução com publicação pública condicionada a aprovação explícita.
+- **Registros de teste e apensamento**: Gestores e Administradores podem classificar ocorrências como `TEST`; esses registros não compõem dashboard, indicadores ou relatórios operacionais padrão. Ocorrências duplicadas ou similares podem ser apensadas sem fusão destrutiva: situação, prioridade, equipe, responsável, SLA e classificação REAL/TEST são sincronizados no grupo, enquanto protocolo, chave de acompanhamento, descrição, dados reportados, fotos e observações permanecem individualizados.
 
 ---
 
@@ -156,7 +157,7 @@ npm run test:firebase
 # Testes de integração de Storage no Emulator
 npm run test:storage
 
-# Verificação formal de conformidade da release 1.0.0 (11 truth points)
+# Verificação formal de conformidade da release 1.0.1 (13 truth points)
 npm run verify:release
 
 # Verificação da invariante de segurança de escala (Scale Guard)
