@@ -50,3 +50,15 @@ jobs:
 
       - name: Maintenance Worker tests
         run: npm run worker:test
+
+      - name: Package complete source tree
+        shell: bash
+        run: git archive --format=zip --output=olhos-do-campus-1.0.1.zip HEAD
+
+      - name: Upload 1.0.1 source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: olhos-do-campus-1.0.1-source
+          path: olhos-do-campus-1.0.1.zip
+          if-no-files-found: error
+          retention-days: 30
