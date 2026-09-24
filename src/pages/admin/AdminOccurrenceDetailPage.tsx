@@ -16,6 +16,8 @@ import {
   INTERNAL_NOTE_AUDIENCES,
   OCCURRENCE_PRIORITIES,
   OCCURRENCE_STATUSES,
+  type AttachmentRelation,
+  type DataClassification,
   type InternalNoteAudience,
   type LocationSelectionInput,
   type Occurrence,
@@ -65,6 +67,11 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
   const [assignedTeamId, setAssignedTeamId] = useState('');
   const [assignedToAdminUserId, setAssignedToAdminUserId] = useState('');
   const [duplicateOfProtocol, setDuplicateOfProtocol] = useState('');
+  const [dataClassification, setDataClassification] = useState<DataClassification>('REAL');
+  const [attachmentTargetProtocol, setAttachmentTargetProtocol] = useState('');
+  const [attachmentRelation, setAttachmentRelation] = useState<AttachmentRelation>('DUPLICATE');
+  const [attachmentReason, setAttachmentReason] = useState('');
+  const [applyPublicMessageToAttached, setApplyPublicMessageToAttached] = useState(false);
   const [publicMessage, setPublicMessage] = useState('');
   const [internalNote, setInternalNote] = useState('');
   const [internalNoteAudience, setInternalNoteAudience] = useState<InternalNoteAudience>('ADMINS_AND_MANAGERS');
@@ -104,6 +111,11 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
     setAssignedTeamId(loaded.assignedTeamId ?? '');
     setAssignedToAdminUserId(loaded.assignedToAdminUserId ?? '');
     setDuplicateOfProtocol(loaded.duplicateOfProtocol ?? '');
+    setDataClassification(loaded.dataClassification);
+    setAttachmentTargetProtocol(loaded.attachedToProtocol ?? '');
+    setAttachmentRelation(loaded.attachmentRelation ?? 'DUPLICATE');
+    setAttachmentReason('');
+    setApplyPublicMessageToAttached(false);
     if (session?.user.role === 'Atendente') {
       setInternalNoteAudience('RESPONSIBLE_TEAM');
     }
@@ -190,11 +202,14 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
       const normalizedAssignment = assignedToAdminUserId.trim();
       const normalizedTeam = assignedTeamId.trim();
       const normalizedDuplicate = duplicateOfProtocol.trim().toUpperCase();
+      const normalizedAttachmentTarget = attachmentTargetProtocol.trim().toUpperCase();
       const categoryChanged = !isAttendant && categoryId !== occurrence.categoryId;
+      const attachmentChanged = !isAttendant && (normalizedAttachmentTarget !== (occurrence.attachedToProtocol ?? '') || (normalizedAttachmentTarget !== '' && attachmentRelation !== occurrence.attachmentRelation));
       const currentSelection = selectionFromOccurrence(occurrence);
       const locationChanged = !isAttendant && locationSelection !== null && JSON.stringify(locationSelection) !== JSON.stringify(currentSelection);
       if (categoryChanged && categoryReason.trim().length < 10) throw new Error('Informe uma justificativa da recategorização com pelo menos 10 caracteres.');
       if (locationChanged && locationReason.trim().length < 10) throw new Error('Informe uma justificativa da correção do local com pelo menos 10 caracteres.');
+      if (attachmentChanged && attachmentReason.trim().length < 10) throw new Error('Informe uma justificativa do apensamento ou desapensamento com pelo menos 10 caracteres.');
       if (!isAttendant && normalizedAssignment && normalizedTeam && !eligibleAssignees.some((item) => item.id === normalizedAssignment)) throw new Error('O responsável individual deve integrar a equipe selecionada.');
       if (internalNote.trim() && audience === 'ADMIN_ONLY' && session.user.role !== 'Administrador') throw new Error('Somente Administradores podem usar a audiência “Somente administradores”.');
       if (internalNote.trim() && audience === 'RESPONSIBLE_TEAM' && !normalizedTeam) throw new Error('Selecione uma equipe responsável antes de usar a audiência “Equipe responsável”.');
@@ -207,14 +222,16 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
         ...(locationChanged && locationSelection ? { location: locationSelection, locationChangeReason: locationReason.trim() } : {}),
         ...(!isAttendant && normalizedTeam !== (occurrence.assignedTeamId ?? '') ? { assignedTeamId: normalizedTeam === '' ? null : normalizedTeam } : {}),
         ...(!isAttendant && normalizedAssignment !== (occurrence.assignedToAdminUserId ?? '') ? { assignedToAdminUserId: normalizedAssignment === '' ? null : normalizedAssignment } : {}),
+        ...(!isAttendant && dataClassification !== occurrence.dataClassification ? { dataClassification } : {}),
+        ...(attachmentChanged ? { attachmentTargetProtocol: normalizedAttachmentTarget === '' ? null : normalizedAttachmentTarget, ...(normalizedAttachmentTarget === '' ? {} : { attachmentRelation }), attachmentReason: attachmentReason.trim() } : {}),
         ...(!isAttendant && status === 'Duplicada' && normalizedDuplicate !== (occurrence.duplicateOfProtocol ?? '') ? { duplicateOfProtocol: normalizedDuplicate === '' ? null : normalizedDuplicate } : {}),
-        ...(publicMessage.trim() === '' ? {} : { newPublicMessage: publicMessage.trim() }),
+        ...(publicMessage.trim() === '' ? {} : { newPublicMessage: publicMessage.trim(), ...(applyPublicMessageToAttached ? { applyPublicMessageToAttached: true } : {}) }),
         ...(internalNote.trim() === '' ? {} : { newInternalNote: internalNote.trim(), internalNoteAudience: audience }),
       };
       if (Object.keys(input).length === 1) { setError('Informe ao menos uma alteração.'); return; }
       const updated = await occurrenceService.update(id, input);
       applyLoaded(updated);
-      setCategoryReason(''); setLocationReason(''); setPublicMessage(''); setInternalNote('');
+      setCategoryReason(''); setLocationReason(''); setAttachmentReason(''); setApplyPublicMessageToAttached(false); setPublicMessage(''); setInternalNote('');
       setSuccess(`Alterações registradas. Versão atual: ${updated.version}.`);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
@@ -268,7 +285,9 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
               <div className="sm:col-span-2"><dt className="detail-term">Local atual</dt><dd className="detail-value">{locationText(occurrence.location)}</dd></div>
               <div className="sm:col-span-2"><dt className="detail-term">Local informado originalmente</dt><dd className="detail-value">{locationText(occurrence.reportedLocation)}</dd></div>
               <div><dt className="detail-term">Responsável</dt><dd className="detail-value">{occurrence.assignedToDisplayNameSnapshot ?? 'Não atribuído'}</dd></div>
-              <div><dt className="detail-term">Ocorrência principal</dt><dd className="detail-value">{occurrence.duplicateOfProtocol ?? 'Não se aplica'}</dd></div>
+              <div><dt className="detail-term">Natureza do registro</dt><dd className="detail-value">{occurrence.dataClassification === 'TEST' ? 'TEST — não contabilizado nos indicadores operacionais' : 'REAL'}</dd></div>
+              <div><dt className="detail-term">Duplicidade legada</dt><dd className="detail-value">{occurrence.duplicateOfProtocol ?? 'Não se aplica'}</dd></div>
+              <div><dt className="detail-term">Apensamento</dt><dd className="detail-value">{occurrence.attachedToProtocol ? `Apensada a ${occurrence.attachedToProtocol} — ${occurrence.attachmentRelation === 'DUPLICATE' ? 'duplicada' : 'similar'}` : occurrence.attachmentGroup && occurrence.attachmentGroup.memberCount > 1 ? `Ocorrência principal de grupo com ${occurrence.attachmentGroup.memberCount} registros` : 'Não se aplica'}</dd></div>
               <div><dt className="detail-term">Tempo total aberto</dt><dd className="detail-value">{(occurrence.totalOpenHours ?? 0).toFixed(1)} h corridas</dd></div>
               <div><dt className="detail-term">Tempo efetivo de SLA</dt><dd className="detail-value">{(occurrence.effectiveBusinessHours ?? 0).toFixed(1)} h úteis</dd></div>
               {occurrence.sla && <><div><dt className="detail-term">Prazo da primeira resposta</dt><dd className="detail-value">{formatDateTime(occurrence.sla.firstResponseDueAt)}{occurrence.sla.firstResponseOutcome ? ` — ${occurrence.sla.firstResponseOutcome === 'ON_TIME' ? 'no prazo' : 'vencido'}` : ''}</dd></div><div><dt className="detail-term">Prazo de conclusão</dt><dd className="detail-value">{formatDateTime(occurrence.sla.resolutionDueAt)} — {occurrence.sla.resolutionPaused ? 'SLA pausado' : occurrence.slaStatus ?? 'em acompanhamento'}</dd></div></>}
@@ -290,10 +309,18 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
             {!isAttendant ? (
               <>
                 <div><label htmlFor="admin-priority" className="form-label">Prioridade</label><select id="admin-priority" className="form-control" value={priority} onChange={(event) => { if (isOccurrencePriority(event.target.value)) setPriority(event.target.value); }}>{OCCURRENCE_PRIORITIES.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
+                <div><label htmlFor="admin-data-classification" className="form-label">Natureza do registro</label><select id="admin-data-classification" className="form-control" value={dataClassification} onChange={(event) => setDataClassification(event.target.value as DataClassification)}><option value="REAL">REAL — ocorrência institucional</option><option value="TEST">TEST — teste/homologação</option></select><p className="mt-1 text-xs text-slate-500">Registros TEST permanecem auditáveis, mas não entram no dashboard, nos indicadores e nos relatórios operacionais por padrão. Em grupos apensados, a classificação é sincronizada.</p></div>
                 <fieldset className="space-y-3 border border-slate-300 p-3"><legend className="px-1 text-sm font-bold text-slate-900">Correção de categoria</legend><div><label htmlFor="admin-category" className="form-label">Categoria atual</label><select id="admin-category" className="form-control" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>{categories.filter((item) => item.active || item.id === occurrence.categoryId).sort((a,b)=>a.sortOrder-b.sortOrder).map((item) => <option key={item.id} value={item.id}>{item.name}{item.active ? '' : ' — inativa'}</option>)}</select></div>{categoryId !== occurrence.categoryId && <div><label htmlFor="category-reason" className="form-label">Justificativa obrigatória</label><textarea id="category-reason" className="form-control min-h-20" value={categoryReason} maxLength={500} onChange={(e)=>setCategoryReason(e.target.value)} required /></div>}<p className="text-xs text-slate-500">O valor originalmente informado pelo comunicante permanece imutável.</p></fieldset>
                 <fieldset className="space-y-3 border border-slate-300 p-3"><legend className="px-1 text-sm font-bold text-slate-900">Correção de local</legend>{locations.length > 1 && <div><label className="form-label" htmlFor="admin-campus">Campus</label><select id="admin-campus" className="form-control" value={selectedCampus?.id ?? ''} onChange={(e)=>changeCampus(e.target.value)}>{locations.map((campus)=><option key={campus.id} value={campus.id}>{campus.campusName}</option>)}</select></div>}<div><label className="form-label" htmlFor="admin-area">Bloco/Área</label><select id="admin-area" className="form-control" value={selectedArea?.id ?? ''} onChange={(e)=>changeArea(e.target.value)}>{selectedCampus?.buildings.filter((area)=>area.active!==false || area.id===occurrence.location.buildingId).sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0)).map((area)=><option key={area.id} value={area.id}>{area.name}</option>)}</select></div><div><label className="form-label" htmlFor="admin-room">Ambiente</label><select id="admin-room" className="form-control" value={locationSelection?.roomId ?? ''} onChange={(e)=>changeRoom(e.target.value)}>{selectedFloor?.rooms.filter((room)=>room.active!==false || room.id===occurrence.location.roomId).sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0)).map((room)=><option key={room.id} value={room.id}>{room.name}</option>)}</select></div>{locationSelection && JSON.stringify(locationSelection)!==JSON.stringify(selectionFromOccurrence(occurrence)) && <div><label htmlFor="location-reason" className="form-label">Justificativa obrigatória</label><textarea id="location-reason" className="form-control min-h-20" value={locationReason} maxLength={500} onChange={(e)=>setLocationReason(e.target.value)} required /></div>}<p className="text-xs text-slate-500">O local reportado originalmente permanece disponível no histórico administrativo.</p></fieldset>
                 <div><label htmlFor="admin-team" className="form-label">Equipe/Setor responsável</label><select id="admin-team" className="form-control" value={assignedTeamId} onChange={(event) => { const value=event.target.value;setAssignedTeamId(value);if(value && !teams.find((t)=>t.id===value)?.memberAdminUserIds.includes(assignedToAdminUserId))setAssignedToAdminUserId(''); }}><option value="">Sem equipe</option>{teams.filter((team)=>team.active || team.id===occurrence.assignedTeamId).sort((a,b)=>a.sortOrder-b.sortOrder).map((team)=><option key={team.id} value={team.id}>{team.name}{team.active?'':' — inativa'}</option>)}</select></div>
                 <div><label htmlFor="admin-assigned" className="form-label">Responsável <span className="font-normal text-slate-500">(opcional)</span></label><select id="admin-assigned" className="form-control" value={assignedToAdminUserId} onChange={(event) => setAssignedToAdminUserId(event.target.value)}><option value="">Não atribuído</option>{assignedToAdminUserId !== '' && !eligibleAssignees.some((item) => item.id === assignedToAdminUserId) && <option value={assignedToAdminUserId}>{occurrence.assignedToDisplayNameSnapshot ?? 'Responsável atual'}</option>}{eligibleAssignees.map((item) => <option key={item.id} value={item.id}>{item.displayName} — {item.role}</option>)}</select></div>
+                <fieldset className="space-y-3 border border-slate-300 p-3"><legend className="px-1 text-sm font-bold text-slate-900">Apensamento operacional</legend>
+                  {occurrence.attachmentGroup && occurrence.attachmentGroup.memberCount > 1 && <div className="border border-slate-200 bg-white p-3"><p className="text-xs font-semibold uppercase text-slate-600">Grupo atual</p><ul className="mt-2 space-y-1 text-sm">{occurrence.attachmentGroup.members.map((member)=><li key={member.id}><Link className="font-mono text-green-800 underline" to={ROUTES.adminOccurrence(member.id)}>{member.protocol}</Link> — {member.relation==='PRIMARY'?'principal':member.relation==='DUPLICATE'?'duplicada':'similar'}</li>)}</ul></div>}
+                  <div><label htmlFor="attachment-target" className="form-label">Protocolo da ocorrência principal</label><input id="attachment-target" className="form-control font-mono uppercase" value={attachmentTargetProtocol} onChange={(event)=>setAttachmentTargetProtocol(event.target.value.toUpperCase())} placeholder="INF-2026-000001" /><p className="mt-1 text-xs text-slate-500">Para desapensar esta ocorrência, apague o protocolo e informe a justificativa. Uma ocorrência principal que já possua apensadas deve ser desmembrada antes de ser apensada a outra.</p></div>
+                  {attachmentTargetProtocol.trim()!=='' && <div><label htmlFor="attachment-relation" className="form-label">Relação</label><select id="attachment-relation" className="form-control" value={attachmentRelation} onChange={(event)=>setAttachmentRelation(event.target.value as AttachmentRelation)}><option value="DUPLICATE">Duplicada — mesmo problema</option><option value="SIMILAR">Similar — tratamento conjunto</option></select></div>}
+                  {(attachmentTargetProtocol.trim().toUpperCase() !== (occurrence.attachedToProtocol ?? '') || (attachmentTargetProtocol.trim()!=='' && attachmentRelation!==occurrence.attachmentRelation)) && <div><label htmlFor="attachment-reason" className="form-label">Justificativa obrigatória</label><textarea id="attachment-reason" className="form-control min-h-20" minLength={10} maxLength={500} value={attachmentReason} onChange={(event)=>setAttachmentReason(event.target.value)} required /></div>}
+                  <p className="text-xs text-slate-500">No grupo, situação, prioridade, equipe, responsável e natureza REAL/TEST são sincronizados. Descrição, local e categoria informados, fotografias, protocolo, chave e observações permanecem próprios de cada registro.</p>
+                </fieldset>
               </>
             ) : (
               <div className="space-y-4 rounded border border-slate-200 bg-white p-3">
@@ -312,7 +339,7 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
               </div>
             )}
             {!isAttendant && status === 'Duplicada' && <div><label htmlFor="duplicate-protocol" className="form-label">Protocolo da ocorrência principal</label><input id="duplicate-protocol" className="form-control font-mono uppercase" value={duplicateOfProtocol} onChange={(event) => setDuplicateOfProtocol(event.target.value.toUpperCase())} placeholder="INF-2026-000001" required /></div>}
-            <div><label htmlFor="admin-public-message" className="form-label">Nova mensagem pública <span className="font-normal text-slate-500">(opcional)</span></label><textarea id="admin-public-message" className="form-control min-h-24" maxLength={1000} value={publicMessage} onChange={(event) => setPublicMessage(event.target.value)} /></div>
+            <div><label htmlFor="admin-public-message" className="form-label">Nova mensagem pública <span className="font-normal text-slate-500">(opcional)</span></label><textarea id="admin-public-message" className="form-control min-h-24" maxLength={1000} value={publicMessage} onChange={(event) => setPublicMessage(event.target.value)} />{!isAttendant && occurrence.attachmentGroup && occurrence.attachmentGroup.memberCount > 1 && publicMessage.trim()!=='' && <label className="mt-2 flex items-start gap-2 text-sm"><input type="checkbox" checked={applyPublicMessageToAttached} onChange={(event)=>setApplyPublicMessageToAttached(event.target.checked)} /><span>Publicar esta mensagem em todas as ocorrências apensadas.</span></label>}</div>
             <div><label htmlFor="admin-internal-note" className="form-label">Nova observação interna <span className="font-normal text-slate-500">(opcional)</span></label><textarea id="admin-internal-note" className="form-control min-h-24" maxLength={1000} value={internalNote} onChange={(event) => setInternalNote(event.target.value)} /></div>
             {internalNote.trim() && !isAttendant && <div><label htmlFor="note-audience" className="form-label">Audiência da observação</label><select id="note-audience" className="form-control" value={internalNoteAudience} onChange={(e)=>{const value=e.target.value;if(INTERNAL_NOTE_AUDIENCES.some((item)=>item===value))setInternalNoteAudience(value as InternalNoteAudience);}}>{INTERNAL_NOTE_AUDIENCES.map((audience)=><option key={audience} value={audience} disabled={(audience==='ADMIN_ONLY'&&session?.user.role!=='Administrador')||(audience==='RESPONSIBLE_TEAM'&&(!assignedTeamId||(session?.user.role!=='Administrador'&&!session?.user.teamIds.includes(assignedTeamId))))}>{AUDIENCE_LABELS[audience]}</option>)}</select></div>}
             {internalNote.trim() && isAttendant && <p className="text-xs text-slate-600">Observação direcionada à equipe responsável.</p>}

@@ -133,7 +133,7 @@ export class OperationalAdminService {
     if(actor)this.assertAdminOrManager(actor);
     const period=defaultPeriod(input);
     const filters:{[K in keyof AnalyticsFilters]?:AnalyticsFilters[K]}={...input,startDate:period.startDate,endDate:period.endDate};
-    const dimensions=analyticsFilterToOccurrence(filters,false);
+    const dimensions:OccurrenceFilterOptions={...analyticsFilterToOccurrence(filters,false),dataClassification:'REAL'};
     const createdBase:OccurrenceFilterOptions={...dimensions,startDate:period.startDate,endDate:period.endDate};
     const closedBase:OccurrenceFilterOptions={...dimensions,closedStartDate:period.startDate,closedEndDate:period.endDate};
     const reopenedBase:OccurrenceFilterOptions={...dimensions,reopenedStartDate:period.startDate,reopenedEndDate:period.endDate};
@@ -162,7 +162,7 @@ export class OperationalAdminService {
 
   public async exportOccurrences(format:ExportFormat,filters:OccurrenceFilterOptions,actor:AuthorizedAdminProfile,c:string):Promise<ExportResult>{
     this.assertAdminOrManager(actor);
-    const result=await this.occurrences.listForExport(filters,EXPORT_LIMIT);
+    const result=await this.occurrences.listForExport({...filters,dataClassification:filters.dataClassification??'REAL'},EXPORT_LIMIT);
     if(result.truncated)throw new HttpError(400,'VALIDATION_ERROR',`A exportação excede o limite seguro de ${EXPORT_LIMIT} registros. Restrinja os filtros ou o período.`);
     let buffer:Buffer;let contentType:string;let extension:string;
     if(format==='csv'){buffer=createCsv(result.items);contentType='text/csv; charset=utf-8';extension='csv';}
@@ -172,5 +172,5 @@ export class OperationalAdminService {
     return{buffer,contentType,fileName:`olhos-do-campus-ocorrencias-${new Date().toISOString().slice(0,10)}.${extension}`,count:result.items.length};
   }
 
-  public async purgeTestOccurrence(id:string,actor:AuthorizedAdminProfile,c:string):Promise<void>{this.assertAdmin(actor);const occurrence=await this.occurrences.getById(id);if(!occurrence)throw new HttpError(404,'NOT_FOUND','Ocorrência não encontrada.');if(occurrence.dataClassification!=='TEST')throw new HttpError(403,'FORBIDDEN','Ocorrências institucionais REAL não podem ser excluídas fisicamente.');const photos=await this.photos.listMetadata(id);for(const photo of photos)await this.photos.deleteObjectsOrQueue(photo,'Expurgo administrativo de ocorrência TEST',c);await this.occurrences.deleteOccurrenceTree(id);await this.audit.write({...this.auditBase(actor,'occurrence',id,c),eventType:'TEST_OCCURRENCE_DELETED',summary:`Ocorrência TEST excluída definitivamente. Protocolo histórico: ${occurrence.protocol}.`,metadata:{protocol:occurrence.protocol,photos:photos.length}});}
+  public async purgeTestOccurrence(id:string,actor:AuthorizedAdminProfile,c:string):Promise<void>{this.assertAdmin(actor);const occurrence=await this.occurrences.getById(id);if(!occurrence)throw new HttpError(404,'NOT_FOUND','Ocorrência não encontrada.');if(occurrence.dataClassification!=='TEST')throw new HttpError(403,'FORBIDDEN','Ocorrências institucionais REAL não podem ser excluídas fisicamente.');if((await this.occurrences.listAttachmentGroup(id)).length>1)throw new HttpError(409,'CONFLICT','Desapense a ocorrência TEST antes de excluí-la definitivamente.');const photos=await this.photos.listMetadata(id);for(const photo of photos)await this.photos.deleteObjectsOrQueue(photo,'Expurgo administrativo de ocorrência TEST',c);await this.occurrences.deleteOccurrenceTree(id);await this.audit.write({...this.auditBase(actor,'occurrence',id,c),eventType:'TEST_OCCURRENCE_DELETED',summary:`Ocorrência TEST excluída definitivamente. Protocolo histórico: ${occurrence.protocol}.`,metadata:{protocol:occurrence.protocol,photos:photos.length}});}
 }

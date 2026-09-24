@@ -1,7 +1,7 @@
 import type { AdminRole } from '../../src/models/admin';
 import type { ServiceCalendar, ServiceCalendarException } from '../../src/models/operations';
 import type {
-  DataClassification, InternalNoteAudience, LocationDetail, OccurrenceEventType, OccurrenceEventVisibility,
+  AttachmentRelation, DataClassification, InternalNoteAudience, LocationDetail, OccurrenceEventType, OccurrenceEventVisibility,
   OccurrencePriority, OccurrenceStatus,
 } from '../../src/models/occurrence';
 
@@ -50,6 +50,12 @@ export interface StoredOccurrence {
   assignedToDisplayNameSnapshot?: string;
   duplicateOfOccurrenceId?: string;
   duplicateOfProtocol?: string;
+  attachedToOccurrenceId?: string;
+  attachedToProtocol?: string;
+  attachmentRelation?: AttachmentRelation;
+  attachmentReason?: string;
+  attachedAt?: Date;
+  attachedByAdminUserId?: string;
   createdAt: Date;
   updatedAt: Date;
   closedAt?: Date;

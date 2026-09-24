@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.1] - 2026-09-24
+
+### Gestão operacional de registros de teste
+- Gestores e Administradores podem reclassificar ocorrências entre `REAL` e `TEST` diretamente no detalhamento administrativo.
+- A reclassificação é auditável, reversível e registrada no histórico da ocorrência.
+- Registros `TEST` permanecem consultáveis no painel, mas são excluídos por padrão do dashboard, indicadores analíticos e relatórios operacionais.
+- Em agrupamentos apensados, a natureza `REAL/TEST` é compartilhada; o sistema impede agrupamentos mistos entre registros reais e de teste.
+
+### Apensamento de ocorrências
+- Incluído apensamento não destrutivo para ocorrências `DUPLICATE` (mesmo problema) e `SIMILAR` (tratamento conjunto), preservando todos os protocolos e registros originais.
+- Situação, prioridade, equipe, responsável individual, SLA, datas operacionais e natureza `REAL/TEST` são sincronizados transacionalmente entre os membros do agrupamento.
+- Descrição, categoria e localização próprias, fotografias, protocolo, chave de acompanhamento e observações administrativas permanecem individualizados.
+- Mensagens públicas podem ser propagadas ao agrupamento mediante opção explícita do Gestor/Administrador.
+- Apensamento e desapensamento exigem justificativa e geram histórico e auditoria; mudanças de situação decorrentes do apensamento também produzem evento específico de histórico.
+- Foram adicionadas proteções contra mistura com o mecanismo legado de situação `Duplicada`, contra agrupamentos circulares e contra exclusão física de registros TEST ainda apensados.
+
+### Qualidade e release
+- Identidade da release sincronizada em frontend, backend, Cloudflare Maintenance Worker, Cloud Build, metadata e blueprint para `1.0.1`.
+- Adicionado workflow de validação de pull request com TypeScript, ESLint, testes unitários, build, verificação formal de release, Scale Guard e testes do Maintenance Worker.
+- O pipeline gera o ZIP integral `olhos-do-campus-1.0.1.zip` como artefato após aprovação de todas as verificações.
+
+
 
 ## [1.0.0] - 2026-09-15
 

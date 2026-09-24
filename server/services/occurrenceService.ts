@@ -23,7 +23,7 @@ import type { CategoryRepository } from '../repositories/categoryRepository';
 import type { LocationRepository } from '../repositories/locationRepository';
 import type { OccurrenceEventRepository } from '../repositories/occurrenceEventRepository';
 import type { OccurrenceRepository } from '../repositories/occurrenceRepository';
-import { DuplicateCycleError, DuplicateTargetNotFoundError, OccurrenceVersionConflictError } from '../repositories/occurrenceRepository';
+import { AttachmentGroupTooLargeError, DuplicateCycleError, DuplicateTargetNotFoundError, OccurrenceVersionConflictError } from '../repositories/occurrenceRepository';
 import type { OperationalTeamRepository } from '../repositories/operationalTeamRepository';
 import type { SlaConfigRepository } from '../repositories/slaConfigRepository';
 import type { SystemConfigRepository } from '../repositories/systemConfigRepository';
@@ -36,11 +36,13 @@ import { MAX_RESOLUTION_PHOTOS } from './photoService';
 function systemEvent(eventType:NewOccurrenceEvent['eventType'],visibility:NewOccurrenceEvent['visibility'],now:Date,correlationId:string,descriptions:{publicDescription?:string;internalDescription?:string;audience?:InternalNoteAudience;newValue?:string}={}):NewOccurrenceEvent{return{schemaVersion:2,eventType,visibility,createdAt:now,actorType:'SYSTEM',actorRoleSnapshot:'Sistema',correlationId,...descriptions};}
 function adminEvent(eventType:NewOccurrenceEvent['eventType'],visibility:NewOccurrenceEvent['visibility'],now:Date,author:AuthorizedAdminProfile,correlationId:string,values:{publicDescription?:string;internalDescription?:string;previousValue?:string;newValue?:string;reason?:string;audience?:InternalNoteAudience;audienceTeamIdSnapshot?:string}={}):NewOccurrenceEvent{return{schemaVersion:2,eventType,visibility,createdAt:now,actorType:'ADMIN',actorAdminUserId:author.id,actorUid:author.uid,actorRoleSnapshot:author.role,actorDisplayNameSnapshot:author.displayName,correlationId,...values};}
 function tokens(...values:string[]):string[]{return extractSearchTokens(...values);}
+const SHARED_OPERATIONAL_EVENT_TYPES:ReadonlySet<NewOccurrenceEvent['eventType']>=new Set(['STATUS_CHANGED','PRIORITY_CHANGED','TEAM_ASSIGNED','TEAM_CHANGED','RESPONSIBLE_CHANGED','OCCURRENCE_RESOLVED','OCCURRENCE_CLOSED','OCCURRENCE_REOPENED','SLA_PAUSED','SLA_RESUMED','DATA_CLASSIFICATION_CHANGED']);
+function copyOperationalStateForAttachment(target:StoredOccurrence,source:StoredOccurrence):StoredOccurrence{const out:StoredOccurrence={...target,status:source.status,priority:source.priority,priorityRank:source.priorityRank,dataClassification:source.dataClassification,reopenedCount:source.reopenedCount,...(source.sla?{sla:structuredClone(source.sla)}:{})};if(!source.sla)delete out.sla;if(source.assignedTeamId){out.assignedTeamId=source.assignedTeamId;out.assignedTeamNameSnapshot=source.assignedTeamNameSnapshot;}else{delete out.assignedTeamId;delete out.assignedTeamNameSnapshot;}if(source.assignedToAdminUserId){out.assignedToAdminUserId=source.assignedToAdminUserId;out.assignedToDisplayNameSnapshot=source.assignedToDisplayNameSnapshot;}else{delete out.assignedToAdminUserId;delete out.assignedToDisplayNameSnapshot;}if(source.closedAt)out.closedAt=source.closedAt;else delete out.closedAt;if(source.resolvedAt)out.resolvedAt=source.resolvedAt;else delete out.resolvedAt;if(source.firstPublicResponseAt)out.firstPublicResponseAt=source.firstPublicResponseAt;else delete out.firstPublicResponseAt;if(source.lastReopenedAt)out.lastReopenedAt=source.lastReopenedAt;else delete out.lastReopenedAt;return out;}
 
 export class OccurrenceService{
  public constructor(private readonly occurrences:OccurrenceRepository,private readonly events:OccurrenceEventRepository,private readonly categories:CategoryRepository,private readonly locations:LocationRepository,private readonly configs:SystemConfigRepository,private readonly adminUsers:AdminUserRepository,private readonly teams:OperationalTeamRepository,private readonly slaConfigs:SlaConfigRepository,private readonly auditLogs:AuditLogRepository,private readonly photos:PhotoService,private readonly defaultEmailProvider: 'ews' | 'resend' = 'ews'){}
  private async policy():Promise<{policy:BusinessTimePolicy;slaConfig:Awaited<ReturnType<SlaConfigRepository['getSlaConfig']>>}>{const [calendar,exceptions,slaConfig]=await Promise.all([this.slaConfigs.getCalendar(),this.slaConfigs.listExceptions(),this.slaConfigs.getSlaConfig()]);return{policy:{calendar,exceptions},slaConfig};}
- private async dto(o:StoredOccurrence,user:AuthorizedAdminProfile,events?:NewOccurrenceEvent[]):Promise<Occurrence>{const [storedEvents,photos,{policy}]=await Promise.all([events===undefined?this.events.listByOccurrenceId(o.id):this.events.listByOccurrenceId(o.id),this.photos.listMetadata(o.id),this.policy()]);void events;return toAdminOccurrence(o,storedEvents,photos,user,policy);}
+ private async dto(o:StoredOccurrence,user:AuthorizedAdminProfile,events?:NewOccurrenceEvent[]):Promise<Occurrence>{const [storedEvents,photos,{policy},group]=await Promise.all([events===undefined?this.events.listByOccurrenceId(o.id):this.events.listByOccurrenceId(o.id),this.photos.listMetadata(o.id),this.policy(),this.occurrences.listAttachmentGroup(o.id)]);void events;const dto=toAdminOccurrence(o,storedEvents,photos,user,policy);if(group.length>1){const primaryId=o.attachedToOccurrenceId??o.id;const primary=group.find(item=>item.id===primaryId);if(primary){dto.attachmentGroup={primaryOccurrenceId:primary.id,primaryProtocol:primary.protocol,isPrimary:o.id===primary.id,memberCount:group.length,members:group.map(item=>({id:item.id,protocol:item.protocol,relation:item.id===primary.id?'PRIMARY':(item.attachmentRelation??'SIMILAR')}))};}}return dto;}
  public async create(input:CreateOccurrenceInput,correlationId:string):Promise<CreateOccurrenceResponse>;
  public async create(input:CreateOccurrenceInput,photos:IncomingPhoto[],correlationId:string):Promise<CreateOccurrenceResponse>;
  public async create(input:CreateOccurrenceInput,photosOrCorrelationId:IncomingPhoto[]|string,maybeCorrelationId?:string):Promise<CreateOccurrenceResponse>{
@@ -104,20 +106,20 @@ export class OccurrenceService{
  public async update(id:string,input:UpdateOccurrenceInput,author:AuthorizedAdminProfile,correlationId:string):Promise<Occurrence>{
    let current=await this.getStoredById(id);
    if(author.role==='Atendente'){
-     if(current.assignedToAdminUserId!==author.id){
-       throw new HttpError(403,'FORBIDDEN','O perfil Atendente somente pode alterar ocorrências sob sua responsabilidade direta.');
-     }
+     if(current.assignedToAdminUserId!==author.id)throw new HttpError(403,'FORBIDDEN','O perfil Atendente somente pode alterar ocorrências sob sua responsabilidade direta.');
      if(input.priority!==undefined&&input.priority!==current.priority)throw new HttpError(403,'FORBIDDEN','O perfil Atendente não possui permissão para alterar a prioridade.');
      if(input.categoryId!==undefined&&input.categoryId!==current.categoryId)throw new HttpError(403,'FORBIDDEN','O perfil Atendente não possui permissão para recategorizar ocorrências.');
      if(input.location!==undefined)throw new HttpError(403,'FORBIDDEN','O perfil Atendente não possui permissão para alterar o local da ocorrência.');
      if(input.assignedTeamId!==undefined&&input.assignedTeamId!==current.assignedTeamId)throw new HttpError(403,'FORBIDDEN','O perfil Atendente não possui permissão para alterar a equipe responsável.');
      if(input.assignedToAdminUserId!==undefined&&input.assignedToAdminUserId!==current.assignedToAdminUserId)throw new HttpError(403,'FORBIDDEN','O perfil Atendente não possui permissão para reatribuir o responsável.');
      if(input.duplicateOfProtocol!==undefined)throw new HttpError(403,'FORBIDDEN','O perfil Atendente não possui permissão para vincular ou desvincular duplicidades.');
-     if(input.internalNoteAudience!==undefined&&input.internalNoteAudience!=='RESPONSIBLE_TEAM'){
-       throw new HttpError(403,'FORBIDDEN','O perfil Atendente somente pode registrar observações direcionadas à equipe responsável.');
-     }
+     if(input.dataClassification!==undefined||input.attachmentTargetProtocol!==undefined||input.attachmentRelation!==undefined||input.attachmentReason!==undefined||input.applyPublicMessageToAttached!==undefined)throw new HttpError(403,'FORBIDDEN','Somente Gestores e Administradores podem classificar dados de teste ou gerenciar apensamentos.');
+     if(input.internalNoteAudience!==undefined&&input.internalNoteAudience!=='RESPONSIBLE_TEAM')throw new HttpError(403,'FORBIDDEN','O perfil Atendente somente pode registrar observações direcionadas à equipe responsável.');
    }
    if(input.expectedVersion!==current.version)throw new HttpError(409,'CONFLICT','A ocorrência foi atualizada por outro usuário. Recarregue os dados antes de continuar.');
+   const attachmentMutation=input.attachmentTargetProtocol!==undefined;
+   if(attachmentMutation&&(input.status!==undefined||input.priority!==undefined||input.assignedTeamId!==undefined||input.assignedToAdminUserId!==undefined||input.dataClassification!==undefined))throw new HttpError(400,'VALIDATION_ERROR','Registre o apensamento ou desapensamento separadamente das alterações operacionais compartilhadas.');
+   if(attachmentMutation&&input.applyPublicMessageToAttached===true)throw new HttpError(400,'VALIDATION_ERROR','A mensagem em grupo deve ser registrada após concluir o apensamento.');
    const now=new Date();
    const [{policy,slaConfig},currentCategory]=await Promise.all([this.policy(),this.categories.getById(current.categoryId)]);
    if(!currentCategory)throw new HttpError(409,'CONFLICT','A categoria atual não existe mais no catálogo.');
@@ -127,75 +129,63 @@ export class OccurrenceService{
    const eventList:NewOccurrenceEvent[]=[];
    const notificationItems:NotificationOutboxItem[]=[];
    let changed=false;
+   let sharedOperationalChanged=false;
    let teamRoutedEvent=false;
    let responsibleAssignedEvent=false;
 
-   if(input.categoryId!==undefined&&input.categoryId!==current.categoryId){if(!input.categoryChangeReason?.trim())throw new HttpError(400,'VALIDATION_ERROR','A justificativa da alteração de categoria é obrigatória.');const category=await this.categories.getById(input.categoryId);if(!category?.active)throw new HttpError(400,'VALIDATION_ERROR','A nova categoria precisa estar ativa.');next={...next,categoryId:category.id,categoryNameSnapshot:category.name,searchTokens:tokens(next.description,category.name,next.location.buildingName,next.location.room),sla:recalculateResolutionSla(next.sla!,next.createdAt,now,next.priority,category,slaConfig,occurrencePolicy)};changed=true;eventList.push(adminEvent('CATEGORY_CHANGED','PUBLIC',now,author,correlationId,{publicDescription:'A categoria foi ajustada pela equipe responsável após a triagem.',internalDescription:`Categoria alterada de ${current.categoryNameSnapshot} para ${category.name}. Justificativa: ${input.categoryChangeReason.trim()}`,previousValue:current.categoryId,newValue:category.id,reason:input.categoryChangeReason.trim()}));}
+   if(input.dataClassification!==undefined&&input.dataClassification!==current.dataClassification){next={...next,dataClassification:input.dataClassification};changed=true;sharedOperationalChanged=true;eventList.push(adminEvent('DATA_CLASSIFICATION_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:`Classificação do registro alterada de ${current.dataClassification} para ${input.dataClassification}. Registros TEST são excluídos dos indicadores operacionais padrão.`,previousValue:current.dataClassification,newValue:input.dataClassification}));}
+   if(input.categoryId!==undefined&&input.categoryId!==current.categoryId){if(!input.categoryChangeReason?.trim())throw new HttpError(400,'VALIDATION_ERROR','A justificativa da alteração de categoria é obrigatória.');const category=await this.categories.getById(input.categoryId);if(!category?.active)throw new HttpError(400,'VALIDATION_ERROR','A nova categoria precisa estar ativa.');const grouped=(await this.occurrences.listAttachmentGroup(current.id)).length>1;next={...next,categoryId:category.id,categoryNameSnapshot:category.name,searchTokens:tokens(next.description,category.name,next.location.buildingName,next.location.room),sla:grouped?next.sla:recalculateResolutionSla(next.sla!,next.createdAt,now,next.priority,category,slaConfig,occurrencePolicy)};changed=true;eventList.push(adminEvent('CATEGORY_CHANGED','PUBLIC',now,author,correlationId,{publicDescription:'A categoria foi ajustada pela equipe responsável após a triagem.',internalDescription:`Categoria alterada de ${current.categoryNameSnapshot} para ${category.name}. Justificativa: ${input.categoryChangeReason.trim()}${grouped?' O SLA compartilhado do agrupamento foi preservado.':''}`,previousValue:current.categoryId,newValue:category.id,reason:input.categoryChangeReason.trim()}));}
    if(input.location!==undefined){if(!input.locationChangeReason?.trim())throw new HttpError(400,'VALIDATION_ERROR','A justificativa da alteração de localização é obrigatória.');const loc=await this.locations.resolveSnapshot(input.location);if(!loc)throw new HttpError(400,'VALIDATION_ERROR','O novo local não pertence ao cadastro institucional ativo.');if(JSON.stringify(loc)!==JSON.stringify(current.location)){next={...next,location:loc,searchTokens:tokens(next.description,next.categoryNameSnapshot,loc.buildingName,loc.room)};changed=true;eventList.push(adminEvent('LOCATION_CHANGED','PUBLIC',now,author,correlationId,{publicDescription:'A localização foi ajustada pela equipe responsável após a triagem.',internalDescription:`Local alterado para ${loc.buildingName} — ${loc.room}. Justificativa: ${input.locationChangeReason.trim()}`,previousValue:`${current.location.buildingName}|${current.location.room}`,newValue:`${loc.buildingName}|${loc.room}`,reason:input.locationChangeReason.trim()}));}}
-   if(input.priority!==undefined&&input.priority!==current.priority){const category=await this.categories.getById(next.categoryId);if(!category)throw new HttpError(409,'CONFLICT','Categoria atual inválida.');let sla=recalculateResolutionSla(next.sla!,next.createdAt,now,input.priority,category,slaConfig,occurrencePolicy);sla=recalculateFirstResponseBeforeResponse(sla,next.createdAt,input.priority,slaConfig,occurrencePolicy);next={...next,priority:input.priority,priorityRank:PRIORITY_RANK[input.priority],sla};changed=true;eventList.push(adminEvent('PRIORITY_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:`Prioridade alterada de ${current.priority} para ${input.priority}.`,previousValue:current.priority,newValue:input.priority}));}
+   if(input.priority!==undefined&&input.priority!==current.priority){const category=await this.categories.getById(next.categoryId);if(!category)throw new HttpError(409,'CONFLICT','Categoria atual inválida.');let sla=recalculateResolutionSla(next.sla!,next.createdAt,now,input.priority,category,slaConfig,occurrencePolicy);sla=recalculateFirstResponseBeforeResponse(sla,next.createdAt,input.priority,slaConfig,occurrencePolicy);next={...next,priority:input.priority,priorityRank:PRIORITY_RANK[input.priority],sla};changed=true;sharedOperationalChanged=true;eventList.push(adminEvent('PRIORITY_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:`Prioridade alterada de ${current.priority} para ${input.priority}.`,previousValue:current.priority,newValue:input.priority}));}
    let selectedTeam=input.assignedTeamId===undefined?(next.assignedTeamId?await this.teams.getById(next.assignedTeamId):undefined):input.assignedTeamId===null?undefined:await this.teams.getById(input.assignedTeamId);
    if(input.assignedTeamId!==undefined&&input.assignedTeamId!==current.assignedTeamId){
      if(input.assignedTeamId!==null&&(!selectedTeam||!selectedTeam.active))throw new HttpError(400,'VALIDATION_ERROR','A equipe selecionada não existe ou está inativa.');
-     changed=true;
-     if(!selectedTeam){
-       delete next.assignedTeamId;delete next.assignedTeamNameSnapshot;
-       eventList.push(adminEvent('TEAM_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:'Equipe responsável removida.',previousValue:current.assignedTeamId}));
-     }else{
-       next={...next,assignedTeamId:selectedTeam.id,assignedTeamNameSnapshot:selectedTeam.name};
-       eventList.push(adminEvent(current.assignedTeamId?'TEAM_CHANGED':'TEAM_ASSIGNED','INTERNAL',now,author,correlationId,{internalDescription:`Equipe responsável definida como ${selectedTeam.name}.`,previousValue:current.assignedTeamId,newValue:selectedTeam.id}));
-       teamRoutedEvent=true;
-       if(selectedTeam.notificationEmail){
-         const item=createTeamRoutedNotificationItem(next,selectedTeam.notificationEmail,selectedTeam.name,now,this.defaultEmailProvider);
-         if(item)notificationItems.push(item);
-       }
-       if(next.assignedToAdminUserId&&!selectedTeam.memberAdminUserIds.includes(next.assignedToAdminUserId)){
-         eventList.push(adminEvent('RESPONSIBLE_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:'Responsável individual removido porque não integra a nova equipe.',previousValue:next.assignedToAdminUserId}));
-         delete next.assignedToAdminUserId;delete next.assignedToDisplayNameSnapshot;
-       }
-     }
+     changed=true;sharedOperationalChanged=true;
+     if(!selectedTeam){delete next.assignedTeamId;delete next.assignedTeamNameSnapshot;eventList.push(adminEvent('TEAM_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:'Equipe responsável removida.',previousValue:current.assignedTeamId}));}
+     else{next={...next,assignedTeamId:selectedTeam.id,assignedTeamNameSnapshot:selectedTeam.name};eventList.push(adminEvent(current.assignedTeamId?'TEAM_CHANGED':'TEAM_ASSIGNED','INTERNAL',now,author,correlationId,{internalDescription:`Equipe responsável definida como ${selectedTeam.name}.`,previousValue:current.assignedTeamId,newValue:selectedTeam.id}));teamRoutedEvent=true;if(selectedTeam.notificationEmail){const item=createTeamRoutedNotificationItem(next,selectedTeam.notificationEmail,selectedTeam.name,now,this.defaultEmailProvider);if(item)notificationItems.push(item);}if(next.assignedToAdminUserId&&!selectedTeam.memberAdminUserIds.includes(next.assignedToAdminUserId)){eventList.push(adminEvent('RESPONSIBLE_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:'Responsável individual removido porque não integra a nova equipe.',previousValue:next.assignedToAdminUserId}));delete next.assignedToAdminUserId;delete next.assignedToDisplayNameSnapshot;}}
    }
    if(input.assignedToAdminUserId!==undefined&&input.assignedToAdminUserId!==(current.assignedToAdminUserId??null)){
-     changed=true;
-     if(input.assignedToAdminUserId===null){
-       delete next.assignedToAdminUserId;delete next.assignedToDisplayNameSnapshot;
-       eventList.push(adminEvent('RESPONSIBLE_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:'Responsável individual removido.',previousValue:current.assignedToAdminUserId}));
-     }else{
-       const assignee=await this.adminUsers.getById(input.assignedToAdminUserId);
-       if(!assignee?.active||assignee.legacyRole||!isAdminRole(assignee.role))throw new HttpError(400,'VALIDATION_ERROR','O responsável precisa ser um usuário administrativo ativo.');
-       selectedTeam=next.assignedTeamId?await this.teams.getById(next.assignedTeamId):undefined;
-       if(selectedTeam&&!selectedTeam.memberAdminUserIds.includes(assignee.id))throw new HttpError(400,'VALIDATION_ERROR','O responsável individual deve integrar a equipe selecionada.');
-       next={...next,assignedToAdminUserId:assignee.id,assignedToDisplayNameSnapshot:assignee.displayName};
-       eventList.push(adminEvent('RESPONSIBLE_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:`Responsável individual definido como ${assignee.displayName}.`,previousValue:current.assignedToAdminUserId,newValue:assignee.id}));
-       responsibleAssignedEvent=true;
-       if(assignee.email){
-         const item=createResponsibleAssignedNotificationItem(next,assignee.email,assignee.displayName,now,this.defaultEmailProvider);
-         if(item)notificationItems.push(item);
-       }
-     }
+     changed=true;sharedOperationalChanged=true;
+     if(input.assignedToAdminUserId===null){delete next.assignedToAdminUserId;delete next.assignedToDisplayNameSnapshot;eventList.push(adminEvent('RESPONSIBLE_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:'Responsável individual removido.',previousValue:current.assignedToAdminUserId}));}
+     else{const assignee=await this.adminUsers.getById(input.assignedToAdminUserId);if(!assignee?.active||assignee.legacyRole||!isAdminRole(assignee.role))throw new HttpError(400,'VALIDATION_ERROR','O responsável precisa ser um usuário administrativo ativo.');selectedTeam=next.assignedTeamId?await this.teams.getById(next.assignedTeamId):undefined;if(selectedTeam&&!selectedTeam.memberAdminUserIds.includes(assignee.id))throw new HttpError(400,'VALIDATION_ERROR','O responsável individual deve integrar a equipe selecionada.');next={...next,assignedToAdminUserId:assignee.id,assignedToDisplayNameSnapshot:assignee.displayName};eventList.push(adminEvent('RESPONSIBLE_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:`Responsável individual definido como ${assignee.displayName}.`,previousValue:current.assignedToAdminUserId,newValue:assignee.id}));responsibleAssignedEvent=true;if(assignee.email){const item=createResponsibleAssignedNotificationItem(next,assignee.email,assignee.displayName,now,this.defaultEmailProvider);if(item)notificationItems.push(item);}}
    }
-   if(input.status!==undefined&&input.status!==current.status){assertOccurrenceTransition(current.status,input.status,author.role);changed=true;const reopening=isReopeningTransition(current.status,input.status);const wasPaused=isSlaPaused(current.status);const willPause=isSlaPaused(input.status);let sla=next.sla!;if(wasPaused&&!willPause){sla=resumeSla(sla,now,occurrencePolicy);eventList.push(adminEvent('SLA_RESUMED','INTERNAL',now,author,correlationId,{internalDescription:'Contagem efetiva do SLA retomada.'}));}if(!wasPaused&&willPause){sla=pauseSla(sla,now);eventList.push(adminEvent('SLA_PAUSED','INTERNAL',now,author,correlationId,{internalDescription:'Contagem efetiva do SLA pausada pela situação operacional.'}));}next={...next,status:input.status,sla};if(current.firstPublicResponseAt===undefined){next.firstPublicResponseAt=now;next.sla=markFirstPublicResponse(next.sla!,now);}if(isTerminalStatus(input.status)){next.closedAt=now;next.sla=completeSla(next.sla!,next.createdAt,now,occurrencePolicy);if(input.status==='Resolvida')next.resolvedAt=now;else delete next.resolvedAt;if(input.status==='Resolvida')eventList.push(adminEvent('OCCURRENCE_RESOLVED','PUBLIC',now,author,correlationId,{publicDescription:'A ocorrência foi registrada como resolvida pela equipe responsável.',previousValue:current.status,newValue:input.status}));else eventList.push(adminEvent('OCCURRENCE_CLOSED','PUBLIC',now,author,correlationId,{publicDescription:`A ocorrência foi encerrada com a situação ${input.status}.`,previousValue:current.status,newValue:input.status}));}else if(reopening){delete next.closedAt;delete next.resolvedAt;next.reopenedCount=current.reopenedCount+1;next.lastReopenedAt=now;next.sla=reopenSla(next.sla!,now,occurrencePolicy);if(current.status==='Duplicada'){delete next.duplicateOfOccurrenceId;delete next.duplicateOfProtocol;eventList.push(adminEvent('DUPLICATE_UNLINKED','PUBLIC',now,author,correlationId,{publicDescription:'O vínculo de duplicidade foi removido durante a reabertura.'}));}eventList.push(adminEvent('OCCURRENCE_REOPENED','PUBLIC',now,author,correlationId,{publicDescription:'A ocorrência foi reaberta para nova análise.',previousValue:current.status,newValue:input.status}));}else eventList.push(adminEvent('STATUS_CHANGED','PUBLIC',now,author,correlationId,{publicDescription:`Situação atualizada para ${input.status}.`,previousValue:current.status,newValue:input.status}));}
+   if((input.status==='Duplicada'||typeof input.duplicateOfProtocol==='string')){const group=await this.occurrences.listAttachmentGroup(current.id);if(group.length>1)throw new HttpError(409,'CONFLICT','Uma ocorrência apensada não pode utilizar simultaneamente o encerramento legado por duplicidade. Desapense o registro antes de usar a situação Duplicada.');}
+   if(input.status!==undefined&&input.status!==current.status){assertOccurrenceTransition(current.status,input.status,author.role);changed=true;sharedOperationalChanged=true;const reopening=isReopeningTransition(current.status,input.status);const wasPaused=isSlaPaused(current.status);const willPause=isSlaPaused(input.status);let sla=next.sla!;if(wasPaused&&!willPause){sla=resumeSla(sla,now,occurrencePolicy);eventList.push(adminEvent('SLA_RESUMED','INTERNAL',now,author,correlationId,{internalDescription:'Contagem efetiva do SLA retomada.'}));}if(!wasPaused&&willPause){sla=pauseSla(sla,now);eventList.push(adminEvent('SLA_PAUSED','INTERNAL',now,author,correlationId,{internalDescription:'Contagem efetiva do SLA pausada pela situação operacional.'}));}next={...next,status:input.status,sla};if(current.firstPublicResponseAt===undefined){next.firstPublicResponseAt=now;next.sla=markFirstPublicResponse(next.sla!,now);}if(isTerminalStatus(input.status)){next.closedAt=now;next.sla=completeSla(next.sla!,next.createdAt,now,occurrencePolicy);if(input.status==='Resolvida')next.resolvedAt=now;else delete next.resolvedAt;if(input.status==='Resolvida')eventList.push(adminEvent('OCCURRENCE_RESOLVED','PUBLIC',now,author,correlationId,{publicDescription:'A ocorrência foi registrada como resolvida pela equipe responsável.',previousValue:current.status,newValue:input.status}));else eventList.push(adminEvent('OCCURRENCE_CLOSED','PUBLIC',now,author,correlationId,{publicDescription:`A ocorrência foi encerrada com a situação ${input.status}.`,previousValue:current.status,newValue:input.status}));}else if(reopening){delete next.closedAt;delete next.resolvedAt;next.reopenedCount=current.reopenedCount+1;next.lastReopenedAt=now;next.sla=reopenSla(next.sla!,now,occurrencePolicy);if(current.status==='Duplicada'){delete next.duplicateOfOccurrenceId;delete next.duplicateOfProtocol;eventList.push(adminEvent('DUPLICATE_UNLINKED','PUBLIC',now,author,correlationId,{publicDescription:'O vínculo de duplicidade foi removido durante a reabertura.'}));}eventList.push(adminEvent('OCCURRENCE_REOPENED','PUBLIC',now,author,correlationId,{publicDescription:'A ocorrência foi reaberta para nova análise.',previousValue:current.status,newValue:input.status}));}else eventList.push(adminEvent('STATUS_CHANGED','PUBLIC',now,author,correlationId,{publicDescription:`Situação atualizada para ${input.status}.`,previousValue:current.status,newValue:input.status}));}
    if(input.duplicateOfProtocol!==undefined){if(input.duplicateOfProtocol===null){if((input.status??next.status)==='Duplicada')throw new HttpError(409,'CONFLICT','Uma ocorrência Duplicada deve manter referência para a ocorrência principal.');if(next.duplicateOfOccurrenceId){changed=true;delete next.duplicateOfOccurrenceId;delete next.duplicateOfProtocol;eventList.push(adminEvent('DUPLICATE_UNLINKED','PUBLIC',now,author,correlationId,{publicDescription:'O vínculo de duplicidade foi removido.'}));}}else{const target=await this.occurrences.findByProtocol(input.duplicateOfProtocol.trim().toUpperCase());if(!target||target.id===current.id)throw new HttpError(409,'CONFLICT','A ocorrência principal informada é inválida.');if(await this.occurrences.wouldCreateDuplicateCycle(current.id,target.id))throw new HttpError(409,'CONFLICT','O vínculo de duplicidade criaria uma cadeia circular.');if((input.status??next.status)!=='Duplicada')throw new HttpError(409,'CONFLICT','O vínculo de duplicidade somente pode existir quando a situação é Duplicada.');if(target.id!==current.duplicateOfOccurrenceId){changed=true;next={...next,duplicateOfOccurrenceId:target.id,duplicateOfProtocol:target.protocol};eventList.push(adminEvent('DUPLICATE_LINKED','PUBLIC',now,author,correlationId,{publicDescription:`Esta ocorrência foi vinculada ao protocolo principal ${target.protocol}.`,previousValue:current.duplicateOfProtocol,newValue:target.protocol}));}}}
    if(next.status==='Duplicada'&&!next.duplicateOfOccurrenceId)throw new HttpError(409,'CONFLICT','A situação Duplicada exige referência válida para a ocorrência principal.');if(next.status!=='Duplicada'&&next.duplicateOfOccurrenceId)throw new HttpError(409,'CONFLICT','O vínculo de duplicidade não pode permanecer fora da situação Duplicada.');
-   if(input.newPublicMessage!==undefined){changed=true;eventList.push(adminEvent('PUBLIC_MESSAGE_ADDED','PUBLIC',now,author,correlationId,{publicDescription:input.newPublicMessage}));}
-   if(input.newInternalNote!==undefined){
-     const audience=author.role==='Atendente'?'RESPONSIBLE_TEAM':(input.internalNoteAudience??'ADMINS_AND_MANAGERS');
-     if(audience==='ADMIN_ONLY'&&author.role!=='Administrador')throw new HttpError(403,'FORBIDDEN','Somente Administradores podem registrar observação com audiência restrita a administradores.');
-     if(audience==='RESPONSIBLE_TEAM'){
-       if(!next.assignedTeamId)throw new HttpError(400,'VALIDATION_ERROR','Selecione uma equipe responsável antes de restringir a observação à equipe.');
-       if(author.role!=='Administrador'&&!author.teamIds.includes(next.assignedTeamId))throw new HttpError(403,'FORBIDDEN','O usuário somente pode registrar observação para a equipe responsável quando integrar essa equipe.');
+
+   if(input.attachmentTargetProtocol!==undefined){
+     const reason=input.attachmentReason?.trim();if(!reason)throw new HttpError(400,'VALIDATION_ERROR','A justificativa do apensamento ou desapensamento é obrigatória.');
+     if(input.attachmentTargetProtocol===null){
+       if(!current.attachedToOccurrenceId)throw new HttpError(400,'VALIDATION_ERROR','Esta ocorrência não está apensada a outra ocorrência.');
+       changed=true;const previous=current.attachedToProtocol;delete next.attachedToOccurrenceId;delete next.attachedToProtocol;delete next.attachmentRelation;delete next.attachmentReason;delete next.attachedAt;delete next.attachedByAdminUserId;eventList.push(adminEvent('OCCURRENCE_DETACHED','PUBLIC',now,author,correlationId,{publicDescription:'O tratamento conjunto desta ocorrência foi encerrado.',internalDescription:`Ocorrência desapensada de ${previous??'ocorrência principal'}. Justificativa: ${reason}`,previousValue:previous,reason}));
+     }else{
+       const target=await this.occurrences.findByProtocol(input.attachmentTargetProtocol.trim().toUpperCase());if(!target||target.id===current.id)throw new HttpError(409,'CONFLICT','A ocorrência principal informada para apensamento é inválida.');
+       const primary=target.attachedToOccurrenceId?await this.occurrences.getById(target.attachedToOccurrenceId):target;if(!primary)throw new HttpError(409,'CONFLICT','A ocorrência principal do agrupamento não foi encontrada.');
+       if(primary.id===current.id)throw new HttpError(409,'CONFLICT','As ocorrências já pertencem ao mesmo agrupamento ou a operação criaria um vínculo circular.');
+       const currentGroup=await this.occurrences.listAttachmentGroup(current.id);if(!current.attachedToOccurrenceId&&currentGroup.length>1)throw new HttpError(409,'CONFLICT','Esta ocorrência é principal de um agrupamento existente. Desapense as ocorrências vinculadas antes de apensá-la a outra principal.');
+       if(current.status==='Duplicada'||current.duplicateOfOccurrenceId||primary.status==='Duplicada'||primary.duplicateOfOccurrenceId)throw new HttpError(409,'CONFLICT','O apensamento operacional não pode ser combinado com o mecanismo legado de encerramento por duplicidade.');
+       if(current.dataClassification!==primary.dataClassification)throw new HttpError(409,'CONFLICT','Ocorrências REAL e TEST não podem integrar o mesmo agrupamento de apensamento.');
+       const relation=input.attachmentRelation;if(!relation)throw new HttpError(400,'VALIDATION_ERROR','Informe se a ocorrência é duplicada ou similar.');
+       const previousOperational={status:next.status,priority:next.priority,assignedTeamId:next.assignedTeamId,assignedToAdminUserId:next.assignedToAdminUserId};
+       next=copyOperationalStateForAttachment(next,primary);
+       if(previousOperational.status!==next.status)eventList.push(adminEvent('STATUS_CHANGED','PUBLIC',now,author,correlationId,{publicDescription:`Situação sincronizada para ${next.status} em razão do tratamento conjunto.`,previousValue:previousOperational.status,newValue:next.status}));
+       if(previousOperational.priority!==next.priority)eventList.push(adminEvent('PRIORITY_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:`Prioridade sincronizada de ${previousOperational.priority} para ${next.priority} em razão do apensamento.`,previousValue:previousOperational.priority,newValue:next.priority}));
+       if(previousOperational.assignedTeamId!==next.assignedTeamId)eventList.push(adminEvent('TEAM_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:'Equipe responsável sincronizada em razão do apensamento.',previousValue:previousOperational.assignedTeamId,newValue:next.assignedTeamId}));
+       if(previousOperational.assignedToAdminUserId!==next.assignedToAdminUserId)eventList.push(adminEvent('RESPONSIBLE_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:'Responsável individual sincronizado em razão do apensamento.',previousValue:previousOperational.assignedToAdminUserId,newValue:next.assignedToAdminUserId}));
+       next.attachedToOccurrenceId=primary.id;next.attachedToProtocol=primary.protocol;next.attachmentRelation=relation;next.attachmentReason=reason;next.attachedAt=now;next.attachedByAdminUserId=author.id;changed=true;eventList.push(adminEvent('OCCURRENCE_ATTACHED','PUBLIC',now,author,correlationId,{publicDescription:'Esta ocorrência passou a ser tratada em conjunto com outro registro relacionado.',internalDescription:`Ocorrência apensada a ${primary.protocol} como ${relation==='DUPLICATE'?'duplicada':'similar'}. Justificativa: ${reason}`,previousValue:current.attachedToProtocol,newValue:primary.protocol,reason}));
      }
-     changed=true;
-     eventList.push(adminEvent('INTERNAL_NOTE_ADDED','INTERNAL',now,author,correlationId,{internalDescription:input.newInternalNote,audience,...(audience==='RESPONSIBLE_TEAM'&&next.assignedTeamId?{audienceTeamIdSnapshot:next.assignedTeamId}:{})}));
    }
+
+   if(input.newPublicMessage!==undefined){changed=true;eventList.push(adminEvent('PUBLIC_MESSAGE_ADDED','PUBLIC',now,author,correlationId,{publicDescription:input.newPublicMessage}));}
+   if(input.newInternalNote!==undefined){const audience=author.role==='Atendente'?'RESPONSIBLE_TEAM':(input.internalNoteAudience??'ADMINS_AND_MANAGERS');if(audience==='ADMIN_ONLY'&&author.role!=='Administrador')throw new HttpError(403,'FORBIDDEN','Somente Administradores podem registrar observação com audiência restrita a administradores.');if(audience==='RESPONSIBLE_TEAM'){if(!next.assignedTeamId)throw new HttpError(400,'VALIDATION_ERROR','Selecione uma equipe responsável antes de restringir a observação à equipe.');if(author.role!=='Administrador'&&!author.teamIds.includes(next.assignedTeamId))throw new HttpError(403,'FORBIDDEN','O usuário somente pode registrar observação para a equipe responsável quando integrar essa equipe.');}changed=true;eventList.push(adminEvent('INTERNAL_NOTE_ADDED','INTERNAL',now,author,correlationId,{internalDescription:input.newInternalNote,audience,...(audience==='RESPONSIBLE_TEAM'&&next.assignedTeamId?{audienceTeamIdSnapshot:next.assignedTeamId}:{})}));}
+   if(input.applyPublicMessageToAttached===true){const group=await this.occurrences.listAttachmentGroup(current.id);if(group.length<2)throw new HttpError(400,'VALIDATION_ERROR','A ocorrência não integra um agrupamento de apensamento.');}
    if(!changed)throw new HttpError(400,'VALIDATION_ERROR','Informe ao menos uma alteração efetiva.');
+   const propagationEnabled=sharedOperationalChanged||input.applyPublicMessageToAttached===true;
+   const propagatedEvents=eventList.filter(event=>SHARED_OPERATIONAL_EVENT_TYPES.has(event.eventType)||(input.applyPublicMessageToAttached===true&&event.eventType==='PUBLIC_MESSAGE_ADDED'));
    let saved:StoredOccurrence;
-   try{
-     saved=await this.occurrences.updateWithEvents(next,input.expectedVersion,eventList,{},notificationItems);
-   }catch(error){
-     if(error instanceof OccurrenceVersionConflictError)throw new HttpError(409,'CONFLICT','Esta ocorrência foi atualizada por outra operação. Recarregue os dados e tente novamente.');
-     if(error instanceof DuplicateCycleError||error instanceof DuplicateTargetNotFoundError)throw new HttpError(409,'CONFLICT','O vínculo de duplicidade informado é inválido.');
-     throw error;
-   }
+   try{saved=await this.occurrences.updateWithEvents(next,input.expectedVersion,eventList,{},notificationItems,propagationEnabled?{enabled:true,events:propagatedEvents}:undefined);}
+   catch(error){if(error instanceof OccurrenceVersionConflictError)throw new HttpError(409,'CONFLICT','Esta ocorrência foi atualizada por outra operação. Recarregue os dados e tente novamente.');if(error instanceof DuplicateCycleError||error instanceof DuplicateTargetNotFoundError)throw new HttpError(409,'CONFLICT','O vínculo de duplicidade informado é inválido.');if(error instanceof AttachmentGroupTooLargeError)throw new HttpError(409,'CONFLICT','O agrupamento possui ocorrências demais para uma atualização transacional segura.');throw error;}
    await this.auditChanges(current,saved,input,author,correlationId,teamRoutedEvent,responsibleAssignedEvent);
    return this.dto(saved,author);
  }
@@ -210,7 +200,9 @@ export class OccurrenceService{
    if(teamRouted)writes.push(this.auditLogs.write({...base,eventType:'OCCURRENCE_TEAM_ROUTED',summary:`Ocorrência encaminhada para a equipe ${after.assignedTeamNameSnapshot}.`}));
    if(before.assignedToAdminUserId!==after.assignedToAdminUserId)writes.push(this.auditLogs.write({...base,eventType:'OCCURRENCE_RESPONSIBLE_CHANGED',summary:'Responsável individual atualizado.'}));
    if(responsibleAssigned)writes.push(this.auditLogs.write({...base,eventType:'OCCURRENCE_RESPONSIBLE_ASSIGNED',summary:`Responsável individual atribuído: ${after.assignedToDisplayNameSnapshot}.`}));
-   if(input.newPublicMessage)writes.push(this.auditLogs.write({...base,eventType:'PUBLIC_MESSAGE_ADDED',summary:'Mensagem pública adicionada.'}));
+   if(before.dataClassification!==after.dataClassification)writes.push(this.auditLogs.write({...base,eventType:'OCCURRENCE_DATA_CLASSIFICATION_CHANGED',summary:`Classificação alterada de ${before.dataClassification} para ${after.dataClassification}.`}));
+   if(before.attachedToOccurrenceId!==after.attachedToOccurrenceId||before.attachmentRelation!==after.attachmentRelation||before.attachmentReason!==after.attachmentReason){const attached=after.attachedToOccurrenceId!==undefined;writes.push(this.auditLogs.write({...base,eventType:attached?'OCCURRENCE_ATTACHED':'OCCURRENCE_DETACHED',summary:attached?`Ocorrência apensada a ${after.attachedToProtocol} como ${after.attachmentRelation==='DUPLICATE'?'duplicada':'similar'}.`:'Ocorrência desapensada do agrupamento operacional.'}));}
+   if(input.newPublicMessage)writes.push(this.auditLogs.write({...base,eventType:'PUBLIC_MESSAGE_ADDED',summary:input.applyPublicMessageToAttached===true?'Mensagem pública adicionada a todas as ocorrências apensadas.':'Mensagem pública adicionada.'}));
    if(input.newInternalNote)writes.push(this.auditLogs.write({...base,eventType:'INTERNAL_NOTE_ADDED',summary:`Observação interna adicionada com audiência ${author.role==='Atendente'?'RESPONSIBLE_TEAM':(input.internalNoteAudience??'ADMINS_AND_MANAGERS')}.`}));
    await Promise.all(writes);
  }
@@ -290,27 +282,29 @@ export class OccurrenceService{
    const thirty=new Date(now.getTime()-30*86400000);
 
    if(user.role==='Atendente'){
+     const base={dataClassification:'REAL' as const,assignedToAdminUserId:user.id};
      const [urgentOrEmergency,slaBreached,inService,awaitingAction,resolvedRecently]=await Promise.all([
-       this.occurrences.count({priorities:['Urgente','Emergencial'],isClosed:false,assignedToAdminUserId:user.id}),
-       this.occurrences.count({slaBreachedAt:now,assignedToAdminUserId:user.id}),
-       this.occurrences.count({status:'Em atendimento',assignedToAdminUserId:user.id}),
-       this.occurrences.count({statuses:['Aguardando material','Aguardando contratação ou serviço externo'],assignedToAdminUserId:user.id}),
-       this.occurrences.count({status:'Resolvida',resolvedAtFrom:thirty,resolvedAtTo:now,assignedToAdminUserId:user.id}),
+       this.occurrences.count({...base,priorities:['Urgente','Emergencial'],isClosed:false}),
+       this.occurrences.count({...base,slaBreachedAt:now}),
+       this.occurrences.count({...base,status:'Em atendimento'}),
+       this.occurrences.count({...base,statuses:['Aguardando material','Aguardando contratação ou serviço externo']}),
+       this.occurrences.count({...base,status:'Resolvida',resolvedAtFrom:thirty,resolvedAtTo:now}),
      ]);
      return{urgentOrEmergency,slaBreached,withoutRouting:0,inService,awaitingAction,resolvedRecently,receivedToday:0};
    }
 
+   const base={dataClassification:'REAL' as const};
    const [urgentOrEmergency,slaBreached,withoutTeam,withoutResponsible,inService,awaitingAction,resolvedRecently,receivedToday]=await Promise.all([
-     this.occurrences.count({priorities:['Urgente','Emergencial'],isClosed:false}),
-     this.occurrences.count({slaBreachedAt:now}),
-     this.occurrences.count({hasTeam:false,isClosed:false}),
-     this.occurrences.count({hasResponsible:false,isClosed:false}),
-     this.occurrences.count({status:'Em atendimento'}),
-     this.occurrences.count({statuses:['Aguardando material','Aguardando contratação ou serviço externo']}),
-     this.occurrences.count({status:'Resolvida',resolvedAtFrom:thirty,resolvedAtTo:now}),
-     this.occurrences.count({createdAtFrom:start,createdAtTo:end})
+     this.occurrences.count({...base,priorities:['Urgente','Emergencial'],isClosed:false}),
+     this.occurrences.count({...base,slaBreachedAt:now}),
+     this.occurrences.count({...base,hasTeam:false,isClosed:false}),
+     this.occurrences.count({...base,hasResponsible:false,isClosed:false}),
+     this.occurrences.count({...base,status:'Em atendimento'}),
+     this.occurrences.count({...base,statuses:['Aguardando material','Aguardando contratação ou serviço externo']}),
+     this.occurrences.count({...base,status:'Resolvida',resolvedAtFrom:thirty,resolvedAtTo:now}),
+     this.occurrences.count({...base,createdAtFrom:start,createdAtTo:end})
    ]);
-   const withoutBoth=await this.occurrences.count({hasTeam:false,hasResponsible:false,isClosed:false});
+   const withoutBoth=await this.occurrences.count({...base,hasTeam:false,hasResponsible:false,isClosed:false});
    return{urgentOrEmergency,slaBreached,withoutRouting:withoutTeam+withoutResponsible-withoutBoth,inService,awaitingAction,resolvedRecently,receivedToday};
  }
   private async getTrackedOccurrence(protocol: string, key: string): Promise<StoredOccurrence> {

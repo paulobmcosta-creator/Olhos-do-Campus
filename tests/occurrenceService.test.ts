@@ -101,4 +101,87 @@ describe('serviço de ocorrências 0.6.0', () => {
     expect(JSON.stringify(publicView)).toContain('Equipe acionada.');
     expect(JSON.stringify(publicView)).not.toContain('Verificar estoque interno.');
   });
+
+  it('permite que Gestor e Administrador classifiquem ocorrência como TEST e a exclui do dashboard', async () => {
+    const { service, manager, administrator } = makeOccurrenceServiceFixture();
+    const created = await service.create(createInput, 'corr-test-create');
+    const item = (await service.list({}, manager)).items.find((candidate) => candidate.protocol === created.protocol)!;
+    expect((await service.getStats(manager)).receivedToday).toBe(1);
+
+    const testItem = await service.update(item.id, { expectedVersion: item.version, dataClassification: 'TEST' }, manager, 'corr-test-manager');
+    expect(testItem.dataClassification).toBe('TEST');
+    expect((await service.getStats(manager)).receivedToday).toBe(0);
+
+    const realItem = await service.update(testItem.id, { expectedVersion: testItem.version, dataClassification: 'REAL' }, administrator, 'corr-test-admin');
+    expect(realItem.dataClassification).toBe('REAL');
+    expect((await service.getStats(manager)).receivedToday).toBe(1);
+  });
+
+  it('apensa ocorrências e sincroniza tratamento operacional sem fundir os registros originais', async () => {
+    const { service, manager, occurrences } = makeOccurrenceServiceFixture();
+    const primaryCreated = await service.create(createInput, 'corr-attach-primary');
+    const childCreated = await service.create({ ...createInput, description: 'A mesma luminária continua sem funcionar.' }, 'corr-attach-child');
+    const primaryStored = await occurrences.findByProtocol(primaryCreated.protocol);
+    const childStored = await occurrences.findByProtocol(childCreated.protocol);
+    expect(primaryStored).toBeDefined();
+    expect(childStored).toBeDefined();
+
+    const childBefore = await service.getById(childStored!.id, manager);
+    const attached = await service.update(childBefore.id, {
+      expectedVersion: childBefore.version,
+      attachmentTargetProtocol: primaryCreated.protocol,
+      attachmentRelation: 'DUPLICATE',
+      attachmentReason: 'Relatos referentes à mesma luminária do mesmo ambiente.',
+    }, manager, 'corr-attach');
+    expect(attached.attachedToProtocol).toBe(primaryCreated.protocol);
+    expect(attached.attachmentRelation).toBe('DUPLICATE');
+    expect(attached.attachmentGroup?.memberCount).toBe(2);
+    expect(attached.description).toBe('A mesma luminária continua sem funcionar.');
+
+    const childInProgress = await service.update(attached.id, { expectedVersion: attached.version, status: 'Em triagem' }, manager, 'corr-attach-status');
+    const primaryInProgress = await service.getById(primaryStored!.id, manager);
+    expect(primaryInProgress.status).toBe('Em triagem');
+    expect(childInProgress.status).toBe('Em triagem');
+
+    const primaryPriority = await service.update(primaryInProgress.id, { expectedVersion: primaryInProgress.version, priority: 'Alta' }, manager, 'corr-attach-priority');
+    const childPriority = await service.getById(childStored!.id, manager);
+    expect(primaryPriority.priority).toBe('Alta');
+    expect(childPriority.priority).toBe('Alta');
+
+    await service.update(primaryPriority.id, {
+      expectedVersion: primaryPriority.version,
+      newPublicMessage: 'A equipe técnica realizará o atendimento conjunto.',
+      applyPublicMessageToAttached: true,
+    }, manager, 'corr-attach-message');
+    const childWithMessage = await service.getById(childStored!.id, manager);
+    expect(childWithMessage.publicMessages.at(-1)?.message).toBe('A equipe técnica realizará o atendimento conjunto.');
+
+    const detached = await service.update(childWithMessage.id, {
+      expectedVersion: childWithMessage.version,
+      attachmentTargetProtocol: null,
+      attachmentReason: 'Vistoria confirmou que os registros exigem tratamentos independentes.',
+    }, manager, 'corr-detach');
+    expect(detached.attachedToProtocol).toBeUndefined();
+
+    const primaryLatest = await service.getById(primaryStored!.id, manager);
+    await service.update(primaryLatest.id, { expectedVersion: primaryLatest.version, status: 'Em análise' }, manager, 'corr-primary-after-detach');
+    const childAfterDetach = await service.getById(childStored!.id, manager);
+    expect(childAfterDetach.status).toBe('Em triagem');
+  });
+
+  it('impede apensamento entre ocorrência REAL e TEST', async () => {
+    const { service, manager, occurrences } = makeOccurrenceServiceFixture();
+    const primary = await service.create(createInput, 'corr-real-primary');
+    const child = await service.create(createInput, 'corr-test-child');
+    const childStored = await occurrences.findByProtocol(child.protocol);
+    const childDto = await service.getById(childStored!.id, manager);
+    const testChild = await service.update(childDto.id, { expectedVersion: childDto.version, dataClassification: 'TEST' }, manager, 'corr-mark-test');
+
+    await expect(service.update(testChild.id, {
+      expectedVersion: testChild.version,
+      attachmentTargetProtocol: primary.protocol,
+      attachmentRelation: 'SIMILAR',
+      attachmentReason: 'Registros semelhantes identificados durante a triagem operacional.',
+    }, manager, 'corr-mixed-attach')).rejects.toMatchObject({ status: 409, code: 'CONFLICT' });
+  });
 });
