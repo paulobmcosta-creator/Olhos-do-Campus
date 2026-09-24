@@ -12,12 +12,14 @@ export const PRIORITY_RANK: Record<OccurrencePriority, number> = { Emergencial: 
 export const INTERNAL_NOTE_AUDIENCES = ['ADMIN_ONLY','ADMINS_AND_MANAGERS','RESPONSIBLE_TEAM'] as const;
 export type InternalNoteAudience = (typeof INTERNAL_NOTE_AUDIENCES)[number];
 export type DataClassification = 'REAL' | 'TEST';
+export type AttachmentRelation = 'DUPLICATE' | 'SIMILAR';
 export type SlaFilterStatus = 'ON_TIME' | 'NEAR_DUE' | 'BREACHED' | 'PAUSED' | 'COMPLETED';
 
 export const OCCURRENCE_EVENT_TYPES = [
   'OCCURRENCE_CREATED','STATUS_CHANGED','CATEGORY_CHANGED','LOCATION_CHANGED','PRIORITY_CHANGED',
   'TEAM_ASSIGNED','TEAM_CHANGED','RESPONSIBLE_CHANGED','PUBLIC_MESSAGE_ADDED','INTERNAL_NOTE_ADDED',
   'DUPLICATE_LINKED','DUPLICATE_UNLINKED','OCCURRENCE_RESOLVED','OCCURRENCE_CLOSED','OCCURRENCE_REOPENED',
+  'DATA_CLASSIFICATION_CHANGED','OCCURRENCE_ATTACHED','OCCURRENCE_DETACHED',
   'SLA_PAUSED','SLA_RESUMED','PHOTO_ADDED','PHOTO_DELETED','PHOTO_VISIBILITY_CHANGED',
 ] as const;
 export type OccurrenceEventType = (typeof OCCURRENCE_EVENT_TYPES)[number];
@@ -78,6 +80,19 @@ export interface InternalNote { id: string; date: string; note: string; authorNa
 export interface OccurrencePhoto { id: string; kind: 'INITIAL' | 'RESOLUTION'; visibility: 'INTERNAL' | 'PUBLIC'; status: 'READY' | 'DELETED'; width: number; height: number; byteSize: number; createdAt: string; }
 export interface PublicOccurrencePhoto { id: string; kind: 'RESOLUTION'; createdAt: string; width: number; height: number; }
 
+export interface OccurrenceAttachmentMember {
+  id: string;
+  protocol: string;
+  relation: 'PRIMARY' | AttachmentRelation;
+}
+export interface OccurrenceAttachmentGroup {
+  primaryOccurrenceId: string;
+  primaryProtocol: string;
+  isPrimary: boolean;
+  memberCount: number;
+  members: OccurrenceAttachmentMember[];
+}
+
 export interface Occurrence {
   id: string;
   protocol: string;
@@ -101,6 +116,12 @@ export interface Occurrence {
   resolvedAt?: string;
   firstPublicResponseAt?: string;
   duplicateOfProtocol?: string;
+  attachedToOccurrenceId?: string;
+  attachedToProtocol?: string;
+  attachmentRelation?: AttachmentRelation;
+  attachmentReason?: string;
+  attachedAt?: string;
+  attachmentGroup?: OccurrenceAttachmentGroup;
   version: number;
   dataClassification: DataClassification;
   reopenedCount: number;
@@ -181,6 +202,11 @@ export interface UpdateOccurrenceInput {
   newInternalNote?: string;
   internalNoteAudience?: InternalNoteAudience;
   duplicateOfProtocol?: string | null;
+  dataClassification?: DataClassification;
+  attachmentTargetProtocol?: string | null;
+  attachmentRelation?: AttachmentRelation;
+  attachmentReason?: string;
+  applyPublicMessageToAttached?: boolean;
 }
 export interface AddResolutionPhotosInput { expectedVersion: number; }
 export interface UpdatePhotoVisibilityInput { expectedVersion: number; visibility: 'INTERNAL' | 'PUBLIC'; }
