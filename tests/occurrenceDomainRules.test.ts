@@ -15,10 +15,24 @@ describe('regras de resolução, reabertura e concorrência', () => {
     );
     expect(resolved.status).toBe('Resolvida');
     expect(resolved.resolvedAt).toBeDefined();
+    const firstClosedAt = resolved.closedAt;
+    const firstCompletedAt = resolved.sla?.completedAt;
+
+    const reclassifiedFinal = await service.update(
+      resolved.id,
+      { expectedVersion: resolved.version, status: 'Cancelada' },
+      manager,
+      'c-final-to-final',
+    );
+    expect(reclassifiedFinal.status).toBe('Cancelada');
+    expect(reclassifiedFinal.closedAt).toBe(firstClosedAt);
+    expect(reclassifiedFinal.sla?.completedAt).toBe(firstCompletedAt);
+    expect(reclassifiedFinal.resolvedAt).toBeUndefined();
+    expect(reclassifiedFinal.reopenedCount).toBe(0);
 
     const reopened = await service.update(
-      resolved.id,
-      { expectedVersion: resolved.version, status: 'Em atendimento' },
+      reclassifiedFinal.id,
+      { expectedVersion: reclassifiedFinal.version, status: 'Em atendimento' },
       manager,
       'c-reopen-direct',
     );
