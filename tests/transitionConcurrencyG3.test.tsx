@@ -247,7 +247,7 @@ describe('Situações livres e conflito de concorrência', () => {
         expect(screen.getByText('INF-2026-000999')).toBeInTheDocument();
       });
 
-      const statusSelect = screen.getByLabelText('Situação') as HTMLSelectElement;
+      const statusSelect = screen.getByLabelText<HTMLSelectElement>('Situação');
       const values = Array.from(statusSelect.options).map((option) => option.value);
       expect(values).toEqual([...OCCURRENCE_STATUSES]);
       expect(values).not.toContain('Duplicada');
