@@ -199,7 +199,7 @@ export function AdminOccurrenceDetailPage(): React.JSX.Element {
       if (internalNote.trim() && audience === 'RESPONSIBLE_TEAM' && session.user.role !== 'Administrador' && !session.user.teamIds.includes(normalizedTeam)) throw new Error('Você precisa integrar a equipe responsável para usar essa audiência.');
       const input: UpdateOccurrenceInput = {
         expectedVersion: occurrence.version,
-        ...(status === occurrence.status ? {} : { status }),
+        ...(status !== occurrence.status && isActiveOccurrenceStatus(status) ? { status } : {}),
         ...(!isAttendant && priority !== occurrence.priority ? { priority } : {}),
         ...(categoryChanged ? { categoryId, categoryChangeReason: categoryReason.trim() } : {}),
         ...(locationChanged && locationSelection ? { location: locationSelection, locationChangeReason: locationReason.trim() } : {}),
