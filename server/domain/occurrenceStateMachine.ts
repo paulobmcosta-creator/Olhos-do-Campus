@@ -25,7 +25,8 @@ export function assertOccurrenceTransition(from: OccurrenceStatus, to: Occurrenc
   throw new HttpError(409, 'INVALID_STATUS_TRANSITION', `A situação “${to}” não está disponível para novas alterações operacionais.`);
 }
 
-export function transitionMatrix(_role?: AdminRole): Readonly<Record<OccurrenceStatus, readonly ActiveOccurrenceStatus[]>> {
+export function transitionMatrix(role?: AdminRole): Readonly<Record<OccurrenceStatus, readonly ActiveOccurrenceStatus[]>> {
+  void role;
   const matrix = {} as Record<OccurrenceStatus, readonly ActiveOccurrenceStatus[]>;
   for (const from of OCCURRENCE_STATUS_VALUES) {
     matrix[from] = OCCURRENCE_STATUSES.filter((to) => to !== from);
