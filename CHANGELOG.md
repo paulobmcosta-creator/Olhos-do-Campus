@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.2] - 2026-09-25
+
+### Situação operacional livre
+- Removida a sequência obrigatória entre situações. Administrador, Gestor e Atendente podem alterar diretamente uma ocorrência que esteja dentro de seu escopo de autorização para qualquer situação operacional ativa.
+- Saídas de situações finais para qualquer situação não final são registradas como reabertura, com limpeza de datas de encerramento, incremento de `reopenedCount` e retomada coerente do SLA.
+- Transições diretas para situações de espera preservam corretamente a pausa do SLA, inclusive quando a ocorrência é reaberta diretamente para `Aguardando material` ou `Aguardando contratação ou serviço externo`.
+- Toda mudança de situação continua produzindo histórico funcional e auditoria.
+
+### Retirada da situação Duplicada
+- `Duplicada` foi retirada da lista de situações ativas e não pode mais ser selecionada nem enviada em novas alterações.
+- Casos duplicados ou similares passam a utilizar exclusivamente o apensamento operacional introduzido na 1.0.1.
+- Registros históricos já persistidos como `Duplicada` permanecem legíveis e podem ser alterados diretamente para qualquer situação ativa; ao sair do estado legado, o vínculo `duplicateOf*` é removido.
+- Filtros e respostas mantêm compatibilidade técnica com dados legados, sem reexpor `Duplicada` nos seletores da interface.
+
+### Implantação e qualidade
+- Identidade da release sincronizada para `1.0.2` em frontend, backend, Worker, Cloud Build, metadata, blueprint, testes e artefato ZIP.
+- Corrigido o wrapper `scripts/deployCloudRun.sh` para usar por padrão a imagem `olhos-do-campus-api`, alinhada ao `cloudbuild.yaml`.
+- Nenhuma migração de Firestore é necessária.
+
 ## [1.0.1] - 2026-09-24
 
 ### Gestão operacional de registros de teste
