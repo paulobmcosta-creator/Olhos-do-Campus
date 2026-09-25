@@ -1,7 +1,7 @@
 {
   "name": "olhos-do-campus",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Sistema do IFES — Campus Barra de São Francisco para registro e acompanhamento de problemas relacionados à infraestrutura física.",
   "type": "module",
   "packageManager": "npm@10.9.2",
