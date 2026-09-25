@@ -78,6 +78,12 @@ describe('G09B-F003 / G09G6R-F002 — Guard de maxScale: invariante de seguranç
       expect(text).toContain('SERVICE_NAME="${SERVICE_NAME:-olhos-do-campus}"');
     });
 
+    it('define IMAGE_NAME canônico como olhos-do-campus-api, igual ao Cloud Build', () => {
+      const text = readFileSync(DEPLOY_SCRIPT_PATH, 'utf-8');
+      expect(text).toContain('IMAGE_NAME="${IMAGE_NAME:-olhos-do-campus-api}"');
+      expect(readFileSync(CLOUDBUILD_PATH, 'utf-8')).toContain('_IMAGE: olhos-do-campus-api');
+    });
+
     it('define REGION canônica de produção us-west1', () => {
       const text = readFileSync(DEPLOY_SCRIPT_PATH, 'utf-8');
       expect(text).toContain('REGION="${REGION:-us-west1}"');
