@@ -30,7 +30,7 @@ As permissões de acesso continuam sendo aplicadas normalmente. Em especial, o p
 
 Ao sair de uma situação final para qualquer situação não final, o sistema registra reabertura, remove as datas de encerramento/resolução quando aplicável, incrementa o contador de reaberturas e retoma o SLA.
 
-Quando a nova situação é uma situação de espera, a reabertura já deixa o SLA pausado de forma coerente.
+Quando a nova situação é uma situação de espera, a reabertura já deixa o SLA pausado de forma coerente. Alterações entre duas situações finais permanecem encerradas e preservam o instante original de fechamento/SLA, evitando distorção dos indicadores.
 
 ## Retirada de Duplicada
 
