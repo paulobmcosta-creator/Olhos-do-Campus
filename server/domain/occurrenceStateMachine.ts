@@ -26,10 +26,9 @@ export function assertOccurrenceTransition(from: OccurrenceStatus, to: Occurrenc
 }
 
 export function transitionMatrix(_role?: AdminRole): Readonly<Record<OccurrenceStatus, readonly ActiveOccurrenceStatus[]>> {
-  return Object.fromEntries(
-    OCCURRENCE_STATUS_VALUES.map((from) => [
-      from,
-      OCCURRENCE_STATUSES.filter((to) => to !== from),
-    ]),
-  ) as Readonly<Record<OccurrenceStatus, readonly ActiveOccurrenceStatus[]>>;
+  const matrix = {} as Record<OccurrenceStatus, readonly ActiveOccurrenceStatus[]>;
+  for (const from of OCCURRENCE_STATUS_VALUES) {
+    matrix[from] = OCCURRENCE_STATUSES.filter((to) => to !== from);
+  }
+  return matrix;
 }
