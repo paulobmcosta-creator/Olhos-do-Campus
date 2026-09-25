@@ -13,6 +13,7 @@
 ## Testes
 
 - `tests/occurrenceStateMachine.test.ts`
+- `tests/attendantRole080.test.ts`
 - `tests/occurrenceDomainRules.test.ts`
 - `tests/transitionConcurrencyG3.test.tsx`
 - `tests/firebaseIntegration.test.ts`
