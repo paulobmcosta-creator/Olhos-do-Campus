@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import type { AdminRole, AdminSession } from '../src/models/admin';
-import type { Occurrence } from '../src/models/occurrence';
+import { OCCURRENCE_STATUSES, type Occurrence } from '../src/models/occurrence';
 import { AdminOccurrenceDetailPage } from '../src/pages/admin/AdminOccurrenceDetailPage';
 import { ApiError } from '../src/services/apiClient';
 import { adminService } from '../src/services/adminService';
@@ -117,38 +117,23 @@ const sampleOccurrence: Occurrence = {
   photos: [],
 };
 
-describe('G09D-F001: Distinção entre Transição Inválida e Conflito de Concorrência', () => {
+describe('Situações livres e conflito de concorrência', () => {
   describe('Validação no Backend', () => {
-    it('INVALID_TRANSITION_BACKEND_TEST — rejeita salto inválido com HTTP 409 e código INVALID_STATUS_TRANSITION', async () => {
+    it('FREE_TRANSITION_BACKEND_TEST — permite salto direto de Recebida para Resolvida', async () => {
       const { service, manager } = makeOccurrenceServiceFixture();
       await service.create(createInput, 'c0');
       const occurrence = (await service.list({}, manager)).items[0]!;
 
-      // Em 'Recebida', apenas 'Em triagem' e 'Cancelada' são permitidas. 'Resolvida' é inválida.
       expect(occurrence.status).toBe('Recebida');
+      const updated = await service.update(
+        occurrence.id,
+        { expectedVersion: occurrence.version, status: 'Resolvida' },
+        manager,
+        'c-free-transition',
+      );
 
-      let thrownError: unknown;
-      try {
-        await service.update(
-          occurrence.id,
-          { expectedVersion: occurrence.version, status: 'Resolvida' },
-          manager,
-          'c-invalid-transition',
-        );
-      } catch (error) {
-        thrownError = error;
-      }
-
-      expect(thrownError).toBeDefined();
-      expect(thrownError).toMatchObject({
-        status: 409,
-        code: 'INVALID_STATUS_TRANSITION',
-      });
-
-      const message = (thrownError as Error).message;
-      expect(message).toContain('não é permitida');
-      expect(message.toLowerCase()).not.toContain('concorrência');
-      expect(message.toLowerCase()).not.toContain('atualizada por outro');
+      expect(updated.status).toBe('Resolvida');
+      expect(updated.resolvedAt).toBeDefined();
     });
 
     it('CONCURRENCY_BACKEND_TEST — rejeita versão obsoleta com HTTP 409 e código CONFLICT', async () => {
@@ -247,14 +232,8 @@ describe('G09D-F001: Distinção entre Transição Inválida e Conflito de Conco
       vi.spyOn(adminService, 'listAssignees').mockResolvedValue([]);
     });
 
-    it('INVALID_TRANSITION_FRONTEND_TEST — exibe mensagem da transição inválida sem menção a concorrência e sem recarregar', async () => {
-      const updateSpy = vi.spyOn(occurrenceService, 'update').mockRejectedValueOnce(
-        new ApiError(
-          'A transição de “Recebida” para “Resolvida” não é permitida pelo fluxo institucional.',
-          409,
-          'INVALID_STATUS_TRANSITION',
-        ),
-      );
+    it('FREE_TRANSITION_FRONTEND_TEST — Atendente visualiza todas as situações ativas e não visualiza Duplicada', async () => {
+      activeRole = 'Atendente';
 
       render(
         <MemoryRouter initialEntries={['/administracao/ocorrencias/occ-test-g3']}>
@@ -268,28 +247,12 @@ describe('G09D-F001: Distinção entre Transição Inválida e Conflito de Conco
         expect(screen.getByText('INF-2026-000999')).toBeInTheDocument();
       });
 
-      // Altera situação
-      const statusSelect = screen.getByLabelText('Situação');
-      fireEvent.change(statusSelect, { target: { value: 'Resolvida' } });
-
-      const saveButton = screen.getByRole('button', { name: /Registrar alterações/i });
-      fireEvent.submit(saveButton.closest('form')!);
-
-      await waitFor(() => {
-        expect(updateSpy).toHaveBeenCalled();
-      });
-
-      // Mensagem orientativa deve ser exibida
-      const alert = await screen.findByRole('alert');
-      expect(alert).toHaveTextContent(/não é permitida pelo fluxo institucional/i);
-
-      // Não deve mencionar concorrência nem atualização por outro usuário
-      expect(alert.textContent?.toLowerCase()).not.toContain('concorrência');
-      expect(alert.textContent?.toLowerCase()).not.toContain('atualizada por outro');
-      expect(alert.textContent?.toLowerCase()).not.toContain('recarregados');
-
-      // Não deve ter chamado getAdminById adicional além do carregamento inicial
-      expect(getAdminByIdSpy).toHaveBeenCalledTimes(1);
+      const statusSelect = screen.getByLabelText('Situação') as HTMLSelectElement;
+      const values = Array.from(statusSelect.options).map((option) => option.value);
+      expect(values).toEqual([...OCCURRENCE_STATUSES]);
+      expect(values).not.toContain('Duplicada');
+      expect(values).toContain('Em atendimento');
+      expect(values).toContain('Resolvida');
     });
 
     it('CONCURRENCY_FRONTEND_TEST — exibe mensagem de concorrência e executa recarregamento dos dados', async () => {
