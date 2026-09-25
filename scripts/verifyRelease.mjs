@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * verifyRelease.mjs
- * Verifica a identidade de release 1.0.1 do projeto Olhos do Campus.
+ * Verifica a identidade de release 1.0.2 do projeto Olhos do Campus.
  * ES module — sem dependências externas.
  */
 
@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 
-const EXPECTED_VERSION = '1.0.1';
+const EXPECTED_VERSION = '1.0.2';
 const EXPECTED_IMAGE_TAG = `v${EXPECTED_VERSION}`;
 const EXPECTED_PROJECT_ID = 'gen-lang-client-0120954905';
 const EXPECTED_WORKER_BACKEND_URL = 'https://olhos-do-campus-hnwfymhsqq-uw.a.run.app';
