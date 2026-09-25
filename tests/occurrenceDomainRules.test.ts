@@ -1,15 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { createInput, makeOccurrenceServiceFixture } from './helpers/occurrenceServiceFixture';
 
-describe('regras de resolução, reabertura, concorrência e duplicidade', () => {
-  it('resolução define resolvedAt e reabertura o remove com incremento de versão', async () => {
+describe('regras de resolução, reabertura e concorrência', () => {
+  it('permite resolução direta e reabertura direta para qualquer situação não final', async () => {
     const { service, manager } = makeOccurrenceServiceFixture();
     await service.create(createInput, 'c0');
-    let occurrence = (await service.list({}, manager)).items[0]!;
-    for (const status of ['Em triagem', 'Em análise', 'Em atendimento', 'Resolvida'] as const) occurrence = await service.update(occurrence.id, { expectedVersion: occurrence.version, status }, manager, `c-${status}`);
-    expect(occurrence.resolvedAt).toBeDefined();
-    const reopened = await service.update(occurrence.id, { expectedVersion: occurrence.version, status: 'Em análise' }, manager, 'c-reopen');
+    const occurrence = (await service.list({}, manager)).items[0]!;
+
+    const resolved = await service.update(
+      occurrence.id,
+      { expectedVersion: occurrence.version, status: 'Resolvida' },
+      manager,
+      'c-resolve-direct',
+    );
+    expect(resolved.status).toBe('Resolvida');
+    expect(resolved.resolvedAt).toBeDefined();
+
+    const reopened = await service.update(
+      resolved.id,
+      { expectedVersion: resolved.version, status: 'Em atendimento' },
+      manager,
+      'c-reopen-direct',
+    );
+    expect(reopened.status).toBe('Em atendimento');
     expect(reopened.resolvedAt).toBeUndefined();
+    expect(reopened.closedAt).toBeUndefined();
+    expect(reopened.reopenedCount).toBe(1);
     expect(reopened.timeline.some((event) => event.title === 'Ocorrência reaberta')).toBe(true);
   });
 
@@ -45,30 +61,38 @@ describe('regras de resolução, reabertura, concorrência e duplicidade', () =>
     expect(withMember.assignedToAdminUserId).toBe(manager.id);
   });
 
-  it('rejeita A→A e A→inexistente', async () => {
+  it('permite alternar diretamente entre situações, inclusive pausa, encerramento e reabertura', async () => {
     const { service, manager } = makeOccurrenceServiceFixture();
-    await service.create(createInput, 'a');
-    const a = (await service.list({}, manager)).items[0]!;
-    await service.update(a.id, { expectedVersion: a.version, status: 'Em triagem' }, manager, 'a-triage');
-    const currentA = await service.getById(a.id, manager);
-    await expect(service.update(a.id, { expectedVersion: currentA.version, status: 'Duplicada', duplicateOfProtocol: currentA.protocol }, manager, 'self')).rejects.toMatchObject({ status: 409 });
-    await expect(service.update(a.id, { expectedVersion: currentA.version, status: 'Duplicada', duplicateOfProtocol: 'INF-2026-999999' }, manager, 'missing')).rejects.toMatchObject({ status: 409 });
-  });
+    await service.create(createInput, 'c-free');
+    let occurrence = (await service.list({}, manager)).items[0]!;
 
-  it('aceita A→B e A→B→C, mas rejeita A→B→A', async () => {
-    const { service, manager } = makeOccurrenceServiceFixture();
-    await service.create({ ...createInput, description: `${createInput.description} A.` }, 'a');
-    await service.create({ ...createInput, description: `${createInput.description} B.` }, 'b');
-    await service.create({ ...createInput, description: `${createInput.description} C.` }, 'c');
-    let [c, b, a] = (await service.list({}, manager)).items;
-    if (a === undefined || b === undefined || c === undefined) throw new Error('Fixtures ausentes.');
-    a = await service.update(a.id, { expectedVersion: a.version, status: 'Em triagem' }, manager, 'a1');
-    b = await service.update(b.id, { expectedVersion: b.version, status: 'Em triagem' }, manager, 'b1');
-    c = await service.update(c.id, { expectedVersion: c.version, status: 'Em triagem' }, manager, 'c1');
-    a = await service.update(a.id, { expectedVersion: a.version, status: 'Duplicada', duplicateOfProtocol: b.protocol }, manager, 'a-b');
-    expect(a.duplicateOfProtocol).toBe(b.protocol);
-    b = await service.update(b.id, { expectedVersion: b.version, status: 'Duplicada', duplicateOfProtocol: c.protocol }, manager, 'b-c');
-    expect(b.duplicateOfProtocol).toBe(c.protocol);
-    await expect(service.update(c.id, { expectedVersion: c.version, status: 'Duplicada', duplicateOfProtocol: a.protocol }, manager, 'c-a')).rejects.toMatchObject({ status: 409 });
+    occurrence = await service.update(
+      occurrence.id,
+      { expectedVersion: occurrence.version, status: 'Aguardando material' },
+      manager,
+      'c-waiting',
+    );
+    expect(occurrence.status).toBe('Aguardando material');
+    expect(occurrence.sla?.resolutionPaused).toBe(true);
+
+    occurrence = await service.update(
+      occurrence.id,
+      { expectedVersion: occurrence.version, status: 'Cancelada' },
+      manager,
+      'c-cancel',
+    );
+    expect(occurrence.status).toBe('Cancelada');
+    expect(occurrence.closedAt).toBeDefined();
+
+    occurrence = await service.update(
+      occurrence.id,
+      { expectedVersion: occurrence.version, status: 'Em atendimento' },
+      manager,
+      'c-reopen-service',
+    );
+    expect(occurrence.status).toBe('Em atendimento');
+    expect(occurrence.closedAt).toBeUndefined();
+    expect(occurrence.sla?.resolutionPaused).toBe(false);
+    expect(occurrence.reopenedCount).toBe(1);
   });
 });
