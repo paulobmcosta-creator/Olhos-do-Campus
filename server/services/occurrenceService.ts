@@ -186,8 +186,14 @@ export class OccurrenceService{
        next.sla=markFirstPublicResponse(next.sla!,now);
      }
      if(isTerminalStatus(input.status)){
-       next.closedAt=now;
-       next.sla=completeSla(next.sla!,next.createdAt,now,occurrencePolicy);
+       if(isTerminalStatus(current.status)){
+         const originalClosedAt=current.closedAt??now;
+         next.closedAt=originalClosedAt;
+         if(next.sla!.completedAt===undefined)next.sla=completeSla(next.sla!,next.createdAt,originalClosedAt,occurrencePolicy);
+       }else{
+         next.closedAt=now;
+         next.sla=completeSla(next.sla!,next.createdAt,now,occurrencePolicy);
+       }
        if(input.status==='Resolvida')next.resolvedAt=now;else delete next.resolvedAt;
        if(input.status==='Resolvida')eventList.push(adminEvent('OCCURRENCE_RESOLVED','PUBLIC',now,author,correlationId,{publicDescription:'A ocorrência foi registrada como resolvida pela equipe responsável.',previousValue:current.status,newValue:input.status}));
        else eventList.push(adminEvent('OCCURRENCE_CLOSED','PUBLIC',now,author,correlationId,{publicDescription:`A ocorrência foi encerrada com a situação ${input.status}.`,previousValue:current.status,newValue:input.status}));
