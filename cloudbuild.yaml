@@ -2,7 +2,7 @@ substitutions:
   _REGION: us-west1
   _REPOSITORY: cloud-run-source-deploy
   _IMAGE: olhos-do-campus-api
-  _IMAGE_TAG: v1.0.1
+  _IMAGE_TAG: v1.0.2
 steps:
   - name: gcr.io/cloud-builders/gcloud
     entrypoint: bash

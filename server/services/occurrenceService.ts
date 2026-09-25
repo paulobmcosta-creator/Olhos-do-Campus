@@ -112,7 +112,7 @@ export class OccurrenceService{
      if(input.location!==undefined)throw new HttpError(403,'FORBIDDEN','O perfil Atendente não possui permissão para alterar o local da ocorrência.');
      if(input.assignedTeamId!==undefined&&input.assignedTeamId!==current.assignedTeamId)throw new HttpError(403,'FORBIDDEN','O perfil Atendente não possui permissão para alterar a equipe responsável.');
      if(input.assignedToAdminUserId!==undefined&&input.assignedToAdminUserId!==current.assignedToAdminUserId)throw new HttpError(403,'FORBIDDEN','O perfil Atendente não possui permissão para reatribuir o responsável.');
-     if(input.duplicateOfProtocol!==undefined)throw new HttpError(403,'FORBIDDEN','O perfil Atendente não possui permissão para vincular ou desvincular duplicidades.');
+     
      if(input.dataClassification!==undefined||input.attachmentTargetProtocol!==undefined||input.attachmentRelation!==undefined||input.attachmentReason!==undefined||input.applyPublicMessageToAttached!==undefined)throw new HttpError(403,'FORBIDDEN','Somente Gestores e Administradores podem classificar dados de teste ou gerenciar apensamentos.');
      if(input.internalNoteAudience!==undefined&&input.internalNoteAudience!=='RESPONSIBLE_TEAM')throw new HttpError(403,'FORBIDDEN','O perfil Atendente somente pode registrar observações direcionadas à equipe responsável.');
    }
@@ -149,10 +149,64 @@ export class OccurrenceService{
      if(input.assignedToAdminUserId===null){delete next.assignedToAdminUserId;delete next.assignedToDisplayNameSnapshot;eventList.push(adminEvent('RESPONSIBLE_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:'Responsável individual removido.',previousValue:current.assignedToAdminUserId}));}
      else{const assignee=await this.adminUsers.getById(input.assignedToAdminUserId);if(!assignee?.active||assignee.legacyRole||!isAdminRole(assignee.role))throw new HttpError(400,'VALIDATION_ERROR','O responsável precisa ser um usuário administrativo ativo.');selectedTeam=next.assignedTeamId?await this.teams.getById(next.assignedTeamId):undefined;if(selectedTeam&&!selectedTeam.memberAdminUserIds.includes(assignee.id))throw new HttpError(400,'VALIDATION_ERROR','O responsável individual deve integrar a equipe selecionada.');next={...next,assignedToAdminUserId:assignee.id,assignedToDisplayNameSnapshot:assignee.displayName};eventList.push(adminEvent('RESPONSIBLE_CHANGED','INTERNAL',now,author,correlationId,{internalDescription:`Responsável individual definido como ${assignee.displayName}.`,previousValue:current.assignedToAdminUserId,newValue:assignee.id}));responsibleAssignedEvent=true;if(assignee.email){const item=createResponsibleAssignedNotificationItem(next,assignee.email,assignee.displayName,now,this.defaultEmailProvider);if(item)notificationItems.push(item);}}
    }
-   if((input.status==='Duplicada'||typeof input.duplicateOfProtocol==='string')){const group=await this.occurrences.listAttachmentGroup(current.id);if(group.length>1)throw new HttpError(409,'CONFLICT','Uma ocorrência apensada não pode utilizar simultaneamente o encerramento legado por duplicidade. Desapense o registro antes de usar a situação Duplicada.');}
-   if(input.status!==undefined&&input.status!==current.status){assertOccurrenceTransition(current.status,input.status,author.role);changed=true;sharedOperationalChanged=true;const reopening=isReopeningTransition(current.status,input.status);const wasPaused=isSlaPaused(current.status);const willPause=isSlaPaused(input.status);let sla=next.sla!;if(wasPaused&&!willPause){sla=resumeSla(sla,now,occurrencePolicy);eventList.push(adminEvent('SLA_RESUMED','INTERNAL',now,author,correlationId,{internalDescription:'Contagem efetiva do SLA retomada.'}));}if(!wasPaused&&willPause){sla=pauseSla(sla,now);eventList.push(adminEvent('SLA_PAUSED','INTERNAL',now,author,correlationId,{internalDescription:'Contagem efetiva do SLA pausada pela situação operacional.'}));}next={...next,status:input.status,sla};if(current.firstPublicResponseAt===undefined){next.firstPublicResponseAt=now;next.sla=markFirstPublicResponse(next.sla!,now);}if(isTerminalStatus(input.status)){next.closedAt=now;next.sla=completeSla(next.sla!,next.createdAt,now,occurrencePolicy);if(input.status==='Resolvida')next.resolvedAt=now;else delete next.resolvedAt;if(input.status==='Resolvida')eventList.push(adminEvent('OCCURRENCE_RESOLVED','PUBLIC',now,author,correlationId,{publicDescription:'A ocorrência foi registrada como resolvida pela equipe responsável.',previousValue:current.status,newValue:input.status}));else eventList.push(adminEvent('OCCURRENCE_CLOSED','PUBLIC',now,author,correlationId,{publicDescription:`A ocorrência foi encerrada com a situação ${input.status}.`,previousValue:current.status,newValue:input.status}));}else if(reopening){delete next.closedAt;delete next.resolvedAt;next.reopenedCount=current.reopenedCount+1;next.lastReopenedAt=now;next.sla=reopenSla(next.sla!,now,occurrencePolicy);if(current.status==='Duplicada'){delete next.duplicateOfOccurrenceId;delete next.duplicateOfProtocol;eventList.push(adminEvent('DUPLICATE_UNLINKED','PUBLIC',now,author,correlationId,{publicDescription:'O vínculo de duplicidade foi removido durante a reabertura.'}));}eventList.push(adminEvent('OCCURRENCE_REOPENED','PUBLIC',now,author,correlationId,{publicDescription:'A ocorrência foi reaberta para nova análise.',previousValue:current.status,newValue:input.status}));}else eventList.push(adminEvent('STATUS_CHANGED','PUBLIC',now,author,correlationId,{publicDescription:`Situação atualizada para ${input.status}.`,previousValue:current.status,newValue:input.status}));}
-   if(input.duplicateOfProtocol!==undefined){if(input.duplicateOfProtocol===null){if((input.status??next.status)==='Duplicada')throw new HttpError(409,'CONFLICT','Uma ocorrência Duplicada deve manter referência para a ocorrência principal.');if(next.duplicateOfOccurrenceId){changed=true;delete next.duplicateOfOccurrenceId;delete next.duplicateOfProtocol;eventList.push(adminEvent('DUPLICATE_UNLINKED','PUBLIC',now,author,correlationId,{publicDescription:'O vínculo de duplicidade foi removido.'}));}}else{const target=await this.occurrences.findByProtocol(input.duplicateOfProtocol.trim().toUpperCase());if(!target||target.id===current.id)throw new HttpError(409,'CONFLICT','A ocorrência principal informada é inválida.');if(await this.occurrences.wouldCreateDuplicateCycle(current.id,target.id))throw new HttpError(409,'CONFLICT','O vínculo de duplicidade criaria uma cadeia circular.');if((input.status??next.status)!=='Duplicada')throw new HttpError(409,'CONFLICT','O vínculo de duplicidade somente pode existir quando a situação é Duplicada.');if(target.id!==current.duplicateOfOccurrenceId){changed=true;next={...next,duplicateOfOccurrenceId:target.id,duplicateOfProtocol:target.protocol};eventList.push(adminEvent('DUPLICATE_LINKED','PUBLIC',now,author,correlationId,{publicDescription:`Esta ocorrência foi vinculada ao protocolo principal ${target.protocol}.`,previousValue:current.duplicateOfProtocol,newValue:target.protocol}));}}}
-   if(next.status==='Duplicada'&&!next.duplicateOfOccurrenceId)throw new HttpError(409,'CONFLICT','A situação Duplicada exige referência válida para a ocorrência principal.');if(next.status!=='Duplicada'&&next.duplicateOfOccurrenceId)throw new HttpError(409,'CONFLICT','O vínculo de duplicidade não pode permanecer fora da situação Duplicada.');
+   if(input.status!==undefined&&input.status!==current.status){
+     assertOccurrenceTransition(current.status,input.status,author.role);
+     changed=true;sharedOperationalChanged=true;
+     const reopening=isReopeningTransition(current.status,input.status);
+     const wasPaused=isSlaPaused(current.status);
+     const willPause=isSlaPaused(input.status);
+     const leavingLegacyDuplicate=current.status==='Duplicada';
+     let sla=next.sla!;
+
+     if(reopening){
+       sla=reopenSla(sla,now,occurrencePolicy);
+       if(willPause){
+         sla=pauseSla(sla,now);
+         eventList.push(adminEvent('SLA_PAUSED','INTERNAL',now,author,correlationId,{internalDescription:'Contagem efetiva do SLA pausada pela situação operacional.'}));
+       }
+     }else{
+       if(wasPaused&&!willPause){
+         sla=resumeSla(sla,now,occurrencePolicy);
+         eventList.push(adminEvent('SLA_RESUMED','INTERNAL',now,author,correlationId,{internalDescription:'Contagem efetiva do SLA retomada.'}));
+       }
+       if(!wasPaused&&willPause){
+         sla=pauseSla(sla,now);
+         eventList.push(adminEvent('SLA_PAUSED','INTERNAL',now,author,correlationId,{internalDescription:'Contagem efetiva do SLA pausada pela situação operacional.'}));
+       }
+     }
+
+     next={...next,status:input.status,sla};
+     if(leavingLegacyDuplicate&&(next.duplicateOfOccurrenceId||next.duplicateOfProtocol)){
+       delete next.duplicateOfOccurrenceId;
+       delete next.duplicateOfProtocol;
+       eventList.push(adminEvent('DUPLICATE_UNLINKED','PUBLIC',now,author,correlationId,{publicDescription:'O vínculo de duplicidade legado foi removido com a alteração da situação.'}));
+     }
+     if(current.firstPublicResponseAt===undefined){
+       next.firstPublicResponseAt=now;
+       next.sla=markFirstPublicResponse(next.sla!,now);
+     }
+     if(isTerminalStatus(input.status)){
+       if(isTerminalStatus(current.status)){
+         const originalClosedAt=current.closedAt??now;
+         next.closedAt=originalClosedAt;
+         if(next.sla!.completedAt===undefined)next.sla=completeSla(next.sla!,next.createdAt,originalClosedAt,occurrencePolicy);
+       }else{
+         next.closedAt=now;
+         next.sla=completeSla(next.sla!,next.createdAt,now,occurrencePolicy);
+       }
+       if(input.status==='Resolvida')next.resolvedAt=now;else delete next.resolvedAt;
+       if(input.status==='Resolvida')eventList.push(adminEvent('OCCURRENCE_RESOLVED','PUBLIC',now,author,correlationId,{publicDescription:'A ocorrência foi registrada como resolvida pela equipe responsável.',previousValue:current.status,newValue:input.status}));
+       else eventList.push(adminEvent('OCCURRENCE_CLOSED','PUBLIC',now,author,correlationId,{publicDescription:`A ocorrência foi encerrada com a situação ${input.status}.`,previousValue:current.status,newValue:input.status}));
+     }else if(reopening){
+       delete next.closedAt;
+       delete next.resolvedAt;
+       next.reopenedCount=current.reopenedCount+1;
+       next.lastReopenedAt=now;
+       eventList.push(adminEvent('OCCURRENCE_REOPENED','PUBLIC',now,author,correlationId,{publicDescription:`A ocorrência foi reaberta com a situação ${input.status}.`,previousValue:current.status,newValue:input.status}));
+     }else{
+       eventList.push(adminEvent('STATUS_CHANGED','PUBLIC',now,author,correlationId,{publicDescription:`Situação atualizada para ${input.status}.`,previousValue:current.status,newValue:input.status}));
+     }
+   }
 
    if(input.attachmentTargetProtocol!==undefined){
      const reason=input.attachmentReason?.trim();if(!reason)throw new HttpError(400,'VALIDATION_ERROR','A justificativa do apensamento ou desapensamento é obrigatória.');

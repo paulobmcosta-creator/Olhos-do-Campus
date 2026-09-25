@@ -7,8 +7,8 @@ import { endpointsForCron, runMaintenance } from '../infra/cloudflare/maintenanc
 import { computeBodyDigest as workerComputeDigest, signMaintenanceRequest } from '../infra/cloudflare/maintenance-worker/src/signature';
 import { APP_VERSION } from '../src/config/version';
 
-describe('Cloudflare Maintenance Worker 1.0.1', () => {
-  it('WORKER_RUNTIME_VERSION_TEST: runtime health reporta versão 1.0.1 e coincide com APP_VERSION', () => {
+describe('Cloudflare Maintenance Worker 1.0.2', () => {
+  it('WORKER_RUNTIME_VERSION_TEST: runtime health reporta versão 1.0.2 e coincide com APP_VERSION', () => {
     const workerSource = readFileSync('infra/cloudflare/maintenance-worker/src/index.ts', 'utf-8');
     const statusMatch = workerSource.match(/status:\s*['"]([^'"]+)['"]/);
     const componentMatch = workerSource.match(/component:\s*['"]([^'"]+)['"]/);
@@ -21,7 +21,7 @@ describe('Cloudflare Maintenance Worker 1.0.1', () => {
     expect(statusMatch?.[1]).toBe('ok');
     expect(componentMatch?.[1]).toBe('maintenance-worker');
     expect(versionMatch?.[1]).toBe(APP_VERSION);
-    expect(versionMatch?.[1]).toBe('1.0.1');
+    expect(versionMatch?.[1]).toBe('1.0.2');
   });
 
   it('gera HMAC compatível com o backend para método, path, timestamp e bodyDigest', async () => {

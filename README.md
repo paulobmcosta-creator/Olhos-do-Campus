@@ -2,11 +2,11 @@
 
 **Sistema Institucional de Manutenção da Infraestrutura Física**  
 **Instituto Federal do Espírito Santo — Campus Barra de São Francisco**  
-**Versão 1.0.1**
+**Versão 1.0.2**
 
 Aplicação institucional para registro de ocorrências de manutenção da infraestrutura física sem identificação pessoal obrigatória, acompanhamento por protocolo e chave de acompanhamento no portal público, e gestão operacional e administrativa pelo corpo técnico e gestor do IFES Campus Barra de São Francisco.
 
-A versão 1.0.1 acrescenta controles de gestão operacional para classificar registros de teste e apensar ocorrências duplicadas ou similares. Registros TEST permanecem auditáveis, mas são excluídos dos indicadores operacionais padrão; ocorrências apensadas preservam seus registros individuais e compartilham o tratamento operacional definido para o agrupamento.
+A versão 1.0.2 torna livre a alteração entre as situações operacionais ativas e retira `Duplicada` da lista de situações selecionáveis. Casos duplicados ou similares passam a ser tratados exclusivamente pelo apensamento operacional; registros legados já gravados como `Duplicada` permanecem legíveis e podem ser reabertos para qualquer situação ativa. A versão mantém os controles REAL/TEST e a sincronização operacional dos grupos apensados.
 
 ---
 
@@ -39,7 +39,7 @@ O cliente web no navegador nunca acessa o Firestore nem os buckets de armazename
 
 ## 2. Componentes Implantáveis
 
-A release 1.0.1 possui três componentes implantáveis e versionados de forma unificada:
+A release 1.0.2 possui três componentes implantáveis e versionados de forma unificada:
 
 1. **Cloud Run Backend (`CLOUD_RUN_BACKEND`)**: Serviço containerizado Node.js 22 rodando a API REST Express, executando a lógica de negócio, RBAC, auditoria, outbox de notificações e processamento de fotografias.
 2. **Cloudflare Pages Frontend (`CLOUDFLARE_PAGES_FRONTEND`)**: Single Page Application (SPA) construída com React 19 e Vite, servindo a interface pública para a comunidade acadêmica e o painel administrativo restrito.
@@ -157,7 +157,7 @@ npm run test:firebase
 # Testes de integração de Storage no Emulator
 npm run test:storage
 
-# Verificação formal de conformidade da release 1.0.1 (13 truth points)
+# Verificação formal de conformidade da release 1.0.2 (13 truth points)
 npm run verify:release
 
 # Verificação da invariante de segurança de escala (Scale Guard)

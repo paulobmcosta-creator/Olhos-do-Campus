@@ -517,24 +517,31 @@ describe('Firebase Emulator Suite — domínio persistente 0.6.0', { timeout: 20
       .rejects.toMatchObject({ status: 409 });
   });
 
-  it('valida vínculo de duplicidade e rejeita ciclo A → B → C → A', async () => {
+  it('persiste apensamento operacional e sincroniza situação livre entre ocorrências', async () => {
     const fixture = await makePersistentService();
-    const a = await fixture.service.create({ ...createInput, description: 'Ocorrência A para teste de duplicidade.' }, 'dup-a');
-    const b = await fixture.service.create({ ...createInput, description: 'Ocorrência B para teste de duplicidade.' }, 'dup-b');
-    const c = await fixture.service.create({ ...createInput, description: 'Ocorrência C para teste de duplicidade.' }, 'dup-c');
-    const sa = await fixture.occurrences.findByProtocol(a.protocol);
-    const sb = await fixture.occurrences.findByProtocol(b.protocol);
-    const sc = await fixture.occurrences.findByProtocol(c.protocol);
-    const va = await moveToAnalysis(fixture.service, sa!.id, sa!.version, fixture.administrator);
-    const vb = await moveToAnalysis(fixture.service, sb!.id, sb!.version, fixture.administrator);
-    const vc = await moveToAnalysis(fixture.service, sc!.id, sc!.version, fixture.administrator);
+    const primary = await fixture.service.create({ ...createInput, description: 'Ocorrência principal para teste de apensamento.' }, 'attach-primary');
+    const child = await fixture.service.create({ ...createInput, description: 'Ocorrência relacionada para teste de apensamento.' }, 'attach-child');
+    const primaryStored = await fixture.occurrences.findByProtocol(primary.protocol);
+    const childStored = await fixture.occurrences.findByProtocol(child.protocol);
 
-    const bLinked = await fixture.service.update(sb!.id, { expectedVersion: vb, status: 'Duplicada', duplicateOfProtocol: c.protocol }, fixture.administrator, 'dup-b-c');
-    expect(bLinked.duplicateOfProtocol).toBe(c.protocol);
-    const aLinked = await fixture.service.update(sa!.id, { expectedVersion: va, status: 'Duplicada', duplicateOfProtocol: b.protocol }, fixture.administrator, 'dup-a-b');
-    expect(aLinked.duplicateOfProtocol).toBe(b.protocol);
-    await expect(fixture.service.update(sc!.id, { expectedVersion: vc, status: 'Duplicada', duplicateOfProtocol: a.protocol }, fixture.administrator, 'dup-c-a'))
-      .rejects.toMatchObject({ status: 409 });
+    const childDto = await fixture.service.getById(childStored!.id, fixture.administrator);
+    const attached = await fixture.service.update(childStored!.id, {
+      expectedVersion: childDto.version,
+      attachmentTargetProtocol: primary.protocol,
+      attachmentRelation: 'DUPLICATE',
+      attachmentReason: 'Registros referentes ao mesmo problema físico identificado na vistoria.',
+    }, fixture.administrator, 'attach-link');
+    expect(attached.attachedToProtocol).toBe(primary.protocol);
+
+    const primaryDto = await fixture.service.getById(primaryStored!.id, fixture.administrator);
+    const updatedPrimary = await fixture.service.update(primaryStored!.id, {
+      expectedVersion: primaryDto.version,
+      status: 'Em atendimento',
+    }, fixture.administrator, 'attach-status');
+
+    expect(updatedPrimary.status).toBe('Em atendimento');
+    const childAfter = await fixture.service.getById(childStored!.id, fixture.administrator);
+    expect(childAfter.status).toBe('Em atendimento');
   });
 
   it('persiste categorias, localizações e configuração operacional entre instâncias', async () => {

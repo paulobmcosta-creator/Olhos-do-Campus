@@ -58,9 +58,9 @@ describe('G09B-F003 / G09G6R-F002 — Guard de maxScale: invariante de seguranç
       expect(text).toContain('[DRY-RUN]');
     });
 
-    it('exige token ALLOW_CLOUD_RUN_DEPLOY=CONFIRM_DEPLOY_1_0_1 para deploy real', () => {
+    it('exige token ALLOW_CLOUD_RUN_DEPLOY=CONFIRM_DEPLOY_1_0_2 para deploy real', () => {
       const text = readFileSync(DEPLOY_SCRIPT_PATH, 'utf-8');
-      expect(text).toContain('CONFIRM_DEPLOY_1_0_1');
+      expect(text).toContain('CONFIRM_DEPLOY_1_0_2');
     });
 
     it('G10C-F001: define PROJECT_ID canônico de produção gen-lang-client-0120954905', () => {
@@ -76,6 +76,12 @@ describe('G09B-F003 / G09G6R-F002 — Guard de maxScale: invariante de seguranç
     it('define SERVICE_NAME canônico de produção olhos-do-campus', () => {
       const text = readFileSync(DEPLOY_SCRIPT_PATH, 'utf-8');
       expect(text).toContain('SERVICE_NAME="${SERVICE_NAME:-olhos-do-campus}"');
+    });
+
+    it('define IMAGE_NAME canônico como olhos-do-campus-api, igual ao Cloud Build', () => {
+      const text = readFileSync(DEPLOY_SCRIPT_PATH, 'utf-8');
+      expect(text).toContain('IMAGE_NAME="${IMAGE_NAME:-olhos-do-campus-api}"');
+      expect(readFileSync(CLOUDBUILD_PATH, 'utf-8')).toContain('_IMAGE: olhos-do-campus-api');
     });
 
     it('define REGION canônica de produção us-west1', () => {

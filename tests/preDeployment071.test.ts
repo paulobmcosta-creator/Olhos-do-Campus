@@ -63,7 +63,7 @@ describe('correções pré-implantação 0.7.1', () => {
     expect(verificationIsComplete(value)).toBe(true);
   });
 
-  it('região, baseline Node e Worker são preservados na linha ativa 1.0.1', () => {
+  it('região, baseline Node e Worker são preservados na linha ativa 1.0.2', () => {
     const cloudbuild = readFileSync('cloudbuild.yaml', 'utf8');
     const rootPackage = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string; engines?: { node?: string } };
     const workerPackage = JSON.parse(readFileSync('infra/cloudflare/maintenance-worker/package.json', 'utf8')) as { version: string; engines?: { node?: string }; dependencies?: Record<string, string> };
@@ -72,9 +72,9 @@ describe('correções pré-implantação 0.7.1', () => {
     expect(cloudbuild).toContain('_REGION: us-west1');
     expect(cloudbuild).not.toContain('_REGION: us-central1');
     expect(cloudbuild).toContain('_REGION é obrigatória.');
-    expect(rootPackage).toMatchObject({ version: '1.0.1', engines: { node: '>=22.22.2 <23' } });
-    expect(workerPackage).toMatchObject({ version: '1.0.1', engines: { node: '>=22.22.2 <23' } });
-    expect(workerIndex).toMatch(/version:\s*['"]1\.0\.1['"]/u);
+    expect(rootPackage).toMatchObject({ version: '1.0.2', engines: { node: '>=22.22.2 <23' } });
+    expect(workerPackage).toMatchObject({ version: '1.0.2', engines: { node: '>=22.22.2 <23' } });
+    expect(workerIndex).toMatch(/version:\s*['"]1\.0\.2['"]/u);
     expect(workerPackage.dependencies ?? {}).not.toHaveProperty('olhos-do-campus');
     expect(dockerfile.match(/node:22\.22\.2-bookworm-slim/gu)).toHaveLength(2);
   });

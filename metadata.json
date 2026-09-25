@@ -2,7 +2,7 @@
   "name": "Olhos do Campus",
   "officialName": "Sistema Institucional de Manutenção da Infraestrutura Física",
   "description": "Sistema do IFES — Campus Barra de São Francisco para registro e acompanhamento de problemas relacionados à infraestrutura física.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "requestFramePermissions": [
     "camera"
   ],

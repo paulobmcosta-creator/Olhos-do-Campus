@@ -100,7 +100,7 @@ describe('Papel Atendente (RBAC e Menor Privilégio) - 0.8.0', () => {
     }, attendant, 'att1')).rejects.toThrowError(/permissão para reatribuir o responsável/);
   });
 
-  it('Atendente executa com sucesso as 7 transições de status permitidas', async () => {
+  it('Atendente executa transições de situação livremente em ocorrência atribuída', async () => {
     const { service, occurrences, manager, attendant } = makeOccurrenceServiceFixture();
 
     // 1. Em análise -> Em atendimento
@@ -183,48 +183,37 @@ describe('Papel Atendente (RBAC e Menor Privilégio) - 0.8.0', () => {
     expect(occ2.status).toBe('Em atendimento');
   });
 
-  it('Atendente é bloqueado ao tentar transições de status não autorizadas', async () => {
+  it('Atendente pode alterar diretamente entre situações ativas, inclusive encerrar e reabrir', async () => {
     const { service, occurrences, manager, attendant } = makeOccurrenceServiceFixture();
 
-    const res = await service.create(createInput, 'c1');
+    const res = await service.create(createInput, 'c-free');
     let occ: StoredOccurrence | Occurrence = (await occurrences.findByProtocol(res.protocol))!;
-    occ = (await service.update(occ.id, {
+    occ = await service.update(occ.id, {
       expectedVersion: occ.version,
       assignedTeamId: 'team-admin',
       assignedToAdminUserId: attendant.id,
-    }, manager, 'm1'));
+    }, manager, 'm-assign');
 
-    // Recebida -> Resolvida is blocked for Atendente
-    await expect(service.update(occ.id, {
+    occ = await service.update(occ.id, {
       expectedVersion: occ.version,
       status: 'Resolvida',
-    }, attendant, 'att1')).rejects.toThrowError(/não possui permissão para transitar de “Recebida” para “Resolvida”/);
+    }, attendant, 'att-resolve-direct');
+    expect(occ.status).toBe('Resolvida');
+    expect(occ.closedAt).toBeDefined();
 
-    // Transition to Em análise then Em atendimento
-    occ = (await service.update(occ.id, {
+    occ = await service.update(occ.id, {
       expectedVersion: occ.version,
       status: 'Em triagem',
-    }, manager, 'm2'));
-    occ = (await service.update(occ.id, {
-      expectedVersion: occ.version,
-      status: 'Em análise',
-    }, manager, 'm3'));
-    occ = (await service.update(occ.id, {
-      expectedVersion: occ.version,
-      status: 'Em atendimento',
-    }, attendant, 'att2'));
+    }, attendant, 'att-reopen-direct');
+    expect(occ.status).toBe('Em triagem');
+    expect(occ.closedAt).toBeUndefined();
+    expect(occ.reopenedCount).toBe(1);
 
-    // Em atendimento -> Cancelada is blocked for Atendente
-    await expect(service.update(occ.id, {
-      expectedVersion: occ.version,
-      status: 'Cancelada',
-    }, attendant, 'att3')).rejects.toThrowError(/não possui permissão para transitar de “Em atendimento” para “Cancelada”/);
-
-    // Em atendimento -> Não procedente is blocked for Atendente
-    await expect(service.update(occ.id, {
+    occ = await service.update(occ.id, {
       expectedVersion: occ.version,
       status: 'Não procedente',
-    }, attendant, 'att4')).rejects.toThrowError(/não possui permissão para transitar de “Em atendimento” para “Não procedente”/);
+    }, attendant, 'att-close-direct');
+    expect(occ.status).toBe('Não procedente');
   });
 
   it('Atendente só visualiza observações internas com audiência RESPONSIBLE_TEAM em sua ocorrência', async () => {
