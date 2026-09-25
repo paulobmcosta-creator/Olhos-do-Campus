@@ -176,7 +176,7 @@ export class OccurrenceService{
      }
 
      next={...next,status:input.status,sla};
-     if(leavingLegacyDuplicate&&next.duplicateOfOccurrenceId){
+     if(leavingLegacyDuplicate&&(next.duplicateOfOccurrenceId||next.duplicateOfProtocol)){
        delete next.duplicateOfOccurrenceId;
        delete next.duplicateOfProtocol;
        eventList.push(adminEvent('DUPLICATE_UNLINKED','PUBLIC',now,author,correlationId,{publicDescription:'O vínculo de duplicidade legado foi removido com a alteração da situação.'}));
