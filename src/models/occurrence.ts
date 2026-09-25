@@ -1,9 +1,12 @@
 export const OCCURRENCE_STATUSES = [
   'Recebida','Em triagem','Em análise','Encaminhada ao setor responsável','Em atendimento',
-  'Aguardando material','Aguardando contratação ou serviço externo','Resolvida','Não procedente','Duplicada','Cancelada',
+  'Aguardando material','Aguardando contratação ou serviço externo','Resolvida','Não procedente','Cancelada',
 ] as const;
-export type OccurrenceStatus = (typeof OCCURRENCE_STATUSES)[number];
-export const TERMINAL_OCCURRENCE_STATUSES = ['Resolvida','Não procedente','Duplicada','Cancelada'] as const;
+export const LEGACY_OCCURRENCE_STATUSES = ['Duplicada'] as const;
+export const OCCURRENCE_STATUS_VALUES = [...OCCURRENCE_STATUSES, ...LEGACY_OCCURRENCE_STATUSES] as const;
+export type ActiveOccurrenceStatus = (typeof OCCURRENCE_STATUSES)[number];
+export type OccurrenceStatus = (typeof OCCURRENCE_STATUS_VALUES)[number];
+export const TERMINAL_OCCURRENCE_STATUSES = ['Resolvida','Não procedente','Cancelada','Duplicada'] as const;
 
 export const OCCURRENCE_PRIORITIES = ['Baixa','Normal','Alta','Urgente','Emergencial'] as const;
 export type OccurrencePriority = (typeof OCCURRENCE_PRIORITIES)[number];
@@ -25,7 +28,8 @@ export const OCCURRENCE_EVENT_TYPES = [
 export type OccurrenceEventType = (typeof OCCURRENCE_EVENT_TYPES)[number];
 export type OccurrenceEventVisibility = 'PUBLIC' | 'INTERNAL';
 
-export function isOccurrenceStatus(value: string): value is OccurrenceStatus { return OCCURRENCE_STATUSES.some((item) => item === value); }
+export function isOccurrenceStatus(value: string): value is OccurrenceStatus { return OCCURRENCE_STATUS_VALUES.some((item) => item === value); }
+export function isActiveOccurrenceStatus(value: string): value is ActiveOccurrenceStatus { return OCCURRENCE_STATUSES.some((item) => item === value); }
 export function isOccurrencePriority(value: string): value is OccurrencePriority { return OCCURRENCE_PRIORITIES.some((item) => item === value); }
 
 export interface LocationDetail {
@@ -190,7 +194,7 @@ export interface OccurrenceFilterOptions {
 export interface CreateOccurrenceInput { location: LocationSelectionInput; categoryId: string; description: string; immediateRisk: boolean; }
 export interface UpdateOccurrenceInput {
   expectedVersion: number;
-  status?: OccurrenceStatus;
+  status?: ActiveOccurrenceStatus;
   priority?: OccurrencePriority;
   categoryId?: string;
   categoryChangeReason?: string;
@@ -201,7 +205,6 @@ export interface UpdateOccurrenceInput {
   newPublicMessage?: string;
   newInternalNote?: string;
   internalNoteAudience?: InternalNoteAudience;
-  duplicateOfProtocol?: string | null;
   dataClassification?: DataClassification;
   attachmentTargetProtocol?: string | null;
   attachmentRelation?: AttachmentRelation;
