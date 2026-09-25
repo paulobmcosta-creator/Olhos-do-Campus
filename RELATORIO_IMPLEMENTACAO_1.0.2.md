@@ -54,3 +54,20 @@ Quando um registro histórico já está em `Duplicada`, a interface pode apresen
 O wrapper `scripts/deployCloudRun.sh` passou a separar o nome do serviço (`olhos-do-campus`) do nome da imagem (`olhos-do-campus-api`), corrigindo a divergência observada durante a implantação da 1.0.1.
 
 Não há migração de Firestore.
+
+## 8. Validação técnica
+
+O run funcional #26 do workflow `Validate pull request`, no commit `afd6eabb99b8a2b0ed3df333f76b13d2d7f0310f`, foi aprovado integralmente:
+
+- `npm ci`: PASS;
+- TypeScript strict: PASS;
+- ESLint com zero warnings: PASS;
+- suíte principal: 72 arquivos aprovados, 2 ignorados; 577 testes aprovados, 3 ignorados;
+- build de produção: PASS;
+- verificação formal da release: `RELEASE_IDENTITY_TEST=PASS`;
+- Scale Guard: `MAX_SCALE_1_SECURITY_INVARIANT=YES`;
+- typecheck do Maintenance Worker: PASS;
+- testes do Maintenance Worker: 7/7 PASS;
+- geração e upload do ZIP integral pelo pipeline: PASS.
+
+As suítes de Firebase Emulator e integrações reais opt-in EWS/R2/Resend não foram executadas pelo workflow e não são declaradas como concluídas.
